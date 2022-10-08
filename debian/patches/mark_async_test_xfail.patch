@@ -1,0 +1,23 @@
+Description: Mark test_wait_for_send as xfail
+Author: Joseph Nahmias <joe@nahmias.net>
+Forwarded: not-needed
+Last-Update: 2020-09-29
+
+--- ipyparallel.orig/ipyparallel/tests/test_asyncresult.py
++++ ipyparallel/ipyparallel/tests/test_asyncresult.py
+@@ -2,6 +2,7 @@
+ # Copyright (c) IPython Development Team.
+ # Distributed under the terms of the Modified BSD License.
+ import os
++import pytest
+ import time
+ 
+ from IPython.utils.io import capture_output
+@@ -354,6 +355,7 @@
+         self.assertIn('stdout', d)
+         self.assertIn('get', d)
+ 
++    @pytest.mark.xfail(reason="test isn't deterministic")
+     def test_wait_for_send(self):
+         view = self.client[-1]
+         view.track = True

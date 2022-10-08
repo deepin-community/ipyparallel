@@ -1,0 +1,16 @@
+Description: Use /etc/ for config files, instead of /usr/etc
+Author: Joseph Nahmias <joe@nahmias.net>
+Bug-Debian: https://bugs.debian.org/969708
+Last-Update: 2021-10-01
+Forwarded: not-needed
+--- ipyparallel.orig/setup.py
++++ ipyparallel/setup.py
+@@ -37,7 +37,7 @@
+ data_files_spec = [
+     # all extension-enabling config files
+     (
+-        'etc/jupyter',
++        '/etc/jupyter',
+         'etc/jupyter',
+         '**',
+     ),

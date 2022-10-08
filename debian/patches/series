@@ -1,0 +1,5 @@
+fix_test_expecting_public_ip_addr.patch
+use_etc_without_usr.patch
+use-local-intershpinx-inventory-files.patch
+mark_async_test_xfail.patch
+fix_docs

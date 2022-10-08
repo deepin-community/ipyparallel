@@ -1,0 +1,16 @@
+[build-system]
+requires = [
+  "jupyterlab>=3.0.0,==3.*",
+  "packaging",
+  "setuptools>=40.8.0",
+  "wheel",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+skip-string-normalization = true
+target_version = [
+    "py36",
+    "py37",
+    "py38",
+]

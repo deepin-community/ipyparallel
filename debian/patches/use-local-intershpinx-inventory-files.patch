@@ -1,0 +1,38 @@
+From: Joe Nahmias <joe@nahmias.net>
+Date: Sat, 12 Sep 2020 22:20:56 -0400
+Subject: use local intershpinx inventory files
+Forwarded: not-needed
+--- ipyparallel.orig/docs/source/conf.py
++++ ipyparallel/docs/source/conf.py
+@@ -353,11 +353,26 @@
+ 
+ # Example configuration for intersphinx: refer to the Python standard library.
+ intersphinx_mapping = {
+-    'python': ('https://docs.python.org/3/', None),
+-    'ipython': ('https://ipython.readthedocs.io/en/stable/', None),
+-    'pymongo': ('https://pymongo.readthedocs.io/en/stable/', None),
+-    'distributed': ('https://distributed.readthedocs.io/en/stable/', None),
+-    'jupyterclient': ('https://jupyter-client.readthedocs.io/en/stable/', None),
++  'python': (
++    'https://docs.python.org/3/',
++    ('/usr/share/doc/python3-doc/html/objects.inv', None)
++  ),
++  'ipython': (
++    'https://ipython.readthedocs.io/en/stable/',
++    ('/usr/share/doc/python-ipython-doc/html/objects.inv', None)
++  ),
++  'pymongo': (
++    'https://pymongo.readthedocs.io/en/stable/',
++    ('/usr/share/doc/python-pymongo-doc/html/objects.inv', None),
++  ),
++  'distributed': (
++    'https://distributed.readthedocs.io/en/stable/',
++    ('/usr/share/doc/python-distributed-doc/html/objects.inv', None)
++  ),
++  'jupyterclient': (
++    'https://jupyter-client.readthedocs.io/en/stable/',
++    ('/usr/share/doc/python-jupyter-client-doc/html/objects.inv', None)
++  ),
+ }
+ 
+ 

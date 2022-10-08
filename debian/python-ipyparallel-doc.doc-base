@@ -1,0 +1,11 @@
+Document: ipyparallel-manual
+Title: IPython for Parallel Computing Manual
+Author: The IPython Development Team
+Abstract: This manual describes what ipyparallel is and how it can be used to
+ created and manage a parallel / distributed computing cluster for use with
+ IPython / Jupyter notebooks.
+Section: Science/Data Analysis
+
+Format: HTML
+Index: /usr/share/doc/python-ipyparallel-doc/html/index.html
+Files: /usr/share/doc/python-ipyparallel-doc/html/*.html

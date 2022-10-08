@@ -1,0 +1,51 @@
+ipyparallel (7.1.0-1) unstable; urgency=medium
+
+  * Team upload.
+  * New upstream version
+  * Standards-Version: 4.6.0 (routine-update)
+  * Remove trailing whitespace in debian/copyright (routine-update)
+  * Refresh patches
+  * Add new dependencies for building the docs: python-pymongo-doc,
+    python3-nbsphinx, python3-sphinx-copybutton, pandoc, python3-matplotlib
+  * Add new dependencies for running the tests: python3-pytest-asyncio,
+    python3-pytest-tornado, python3-psutil, python3-tqdm
+
+ -- Michael R. Crusoe <crusoe@debian.org>  Fri, 01 Oct 2021 12:49:03 +0200
+
+ipyparallel (6.3.0-2) unstable; urgency=medium
+
+  * [0ad42ef] mark -doc pkg as M-A: foreign
+  * [46569b8] do not build -doc pkg if nodoc is requested
+  * [54be5dc] annotate Build-Deps for nodoc and nocheck DEB_BUILD_PROFILES
+
+ -- Joseph Nahmias <jello@debian.org>  Wed, 28 Oct 2020 23:48:59 -0400
+
+ipyparallel (6.3.0-1) unstable; urgency=medium
+
+  [ Joseph Nahmias ]
+  * Initial release, closes: #969708.
+  * fix test that assumed there is a public IP on the machine.
+  * install confiles to /etc, not /usr/etc.
+  * create manpages for cluster management CLI utilities
+  * add autopkgtest info to run the upstream test suite
+  * set IPYTHONDIR explicitly when running test suite
+  * bump debhelper to 13
+  * clean up trailing whitespace
+  * install examples
+  * honor nodoc & nocheck in DEB_BUILD_OPTIONS
+  * use local intershpinx inventory files
+  * [de73160] use the salsa-ci pipeline
+  * [b0f78e7] explicitly use installed path for autopkgtest, thanks Gordon Ball
+  * [5052aad] use my newly restored @debian.org address
+  * [a9e4ffd] mark test_wait_for_send as xfail
+  * [07c25c7] add missing pytest import
+  * [7be3ffc] tweak salsa-ci config.
+     - specify release explicitly;
+     - run pipeline for tags;
+     - don't bother looking for arch:any pkgs to build -- there aren't any.
+
+  [ Ondřej Nový ]
+  * [3b94096] d/control: Update Vcs-* fields with new Debian Python Team
+                         Salsa layout
+
+ -- Joseph Nahmias <jello@debian.org>  Mon, 28 Sep 2020 22:54:01 -0400
