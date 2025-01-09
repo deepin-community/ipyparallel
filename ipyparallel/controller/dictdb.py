@@ -32,16 +32,14 @@ DictDB supports a subset of mongodb operators::
 
     $lt,$gt,$lte,$gte,$ne,$in,$nin,$all,$mod,$exists
 """
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 import copy
 from copy import deepcopy
 from datetime import datetime
 
-from traitlets import Dict
-from traitlets import Float
-from traitlets import Integer
-from traitlets import Unicode
+from traitlets import Dict, Float, Integer, Unicode
 from traitlets.config.configurable import LoggingConfigurable
 
 from ..util import ensure_timezone
@@ -112,7 +110,7 @@ class DictDB(BaseDB):
     _buffer_bytes = Integer(0)  # running total of the bytes in the DB
 
     size_limit = Integer(
-        1024 ** 3,
+        1024**3,
         config=True,
         help="""The maximum total size (in bytes) of the buffers stored in the db
 
@@ -229,7 +227,7 @@ class DictDB(BaseDB):
         for key in ('submitted', 'started', 'completed', 'received'):
             value = rec.get(key, None)
             if value is not None and not isinstance(value, datetime):
-                raise ValueError("%s must be None or datetime, not %r" % (key, value))
+                raise ValueError(f"{key} must be None or datetime, not {value!r}")
             if isinstance(value, datetime) and value.tzinfo is None:
                 self.log.warning(
                     "Timestamps should always have timezones: %s=%s", key, value
@@ -251,7 +249,7 @@ class DictDB(BaseDB):
         """Get a specific Task Record, by msg_id."""
         if msg_id in self._culled_ids:
             raise KeyError("Record %r has been culled for size" % msg_id)
-        if not msg_id in self._records:
+        if msg_id not in self._records:
             raise KeyError("No such msg_id %r" % (msg_id))
         return deepcopy(self._records[msg_id])
 

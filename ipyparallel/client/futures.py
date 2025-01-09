@@ -1,4 +1,5 @@
 """Future-related utils"""
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 import sys
@@ -11,9 +12,10 @@ from tornado.log import app_log
 class MessageFuture(Future):
     """Future class to wrap async messages"""
 
-    def __init__(self, msg_id, track=False):
-        super(MessageFuture, self).__init__()
+    def __init__(self, msg_id, header=None, *, track=False):
+        super().__init__()
         self.msg_id = msg_id
+        self.header = header or {"msg_type": "unknown_request"}
         self._evt = Event()
         self.track = track
         self._tracker = None

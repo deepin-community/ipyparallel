@@ -15,6 +15,7 @@ A good test to run with 16 engines is::
 This should show a speedup of 13-14x.  The limitation here is that the
 overhead of a single task is about 0.001-0.01 seconds.
 """
+
 import random
 import time
 from optparse import OptionParser
@@ -72,7 +73,7 @@ def main():
     ptime = stop - start
     scale = stime / ptime
 
-    print("executed %.1f secs in %.1f secs" % (stime, ptime))
+    print(f"executed {stime:.1f} secs in {ptime:.1f} secs")
     print("%.3fx parallel performance on %i engines" % (scale, nengines))
     print("%.1f%% of theoretical max" % (100 * scale / nengines))
 

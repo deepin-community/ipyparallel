@@ -1,16 +1,21 @@
 """Tornado handlers for IPython cluster web service."""
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 import json
 import os
 
-from jupyter_server.utils import url_path_join as ujoin
+try:
+    from jupyter_server.utils import url_path_join as ujoin
+except ImportError:
+    # fallback on legacy Notebook server
+    from notebook.utils import url_path_join as ujoin
+
 from tornado import web
 
 from ..cluster import ClusterManager
 from ..util import abbreviate_profile_dir
 from .base import get_api_handler
-
 
 static = os.path.join(os.path.dirname(__file__), 'static')
 
@@ -79,10 +84,10 @@ class ClusterListHandler(ClusterHandler):
         self.write(
             json.dumps(
                 sorted(
-                    [
+                    (
                         self.cluster_model(key, cluster)
                         for key, cluster in clusters.items()
-                    ],
+                    ),
                     key=sort_key,
                 )
             )
@@ -103,7 +108,7 @@ class ClusterListHandler(ClusterHandler):
         if (
             'profile' in body
             and 'cluster_id' not in body
-            and f"{body['profile']}:" not in self.cluster_mananger.clusters
+            and f"{body['profile']}:" not in self.cluster_manager.clusters
         ):
             # if no cluster exists for a profile,
             # default for no cluster id instead of random

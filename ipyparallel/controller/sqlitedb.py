@@ -1,4 +1,5 @@
 """A TaskRecord backend using sqlite3"""
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 import json
@@ -8,6 +9,7 @@ try:
     import cPickle as pickle
 except ImportError:
     import pickle
+
 from datetime import datetime
 
 try:
@@ -16,13 +18,17 @@ except ImportError:
     sqlite3 = None
 
 from dateutil.parser import parse as dateutil_parse
+
+try:
+    from jupyter_client.jsonutil import json_default
+except ImportError:
+    from jupyter_client.jsonutil import date_default as json_default
+
 from tornado import ioloop
+from traitlets import Dict, Instance, List, Unicode
 
-from traitlets import Unicode, Instance, List, Dict
-from jupyter_client.jsonutil import date_default
-
-from .dictdb import BaseDB
 from ..util import ensure_timezone, extract_dates
+from .dictdb import BaseDB
 
 # -----------------------------------------------------------------------------
 # SQLite operators, adapters, and converters
@@ -49,7 +55,7 @@ null_operators = {
 
 
 def _adapt_dict(d):
-    return json.dumps(d, default=date_default)
+    return json.dumps(d, default=json_default)
 
 
 def _convert_dict(ds):
@@ -180,7 +186,7 @@ class SQLiteDB(BaseDB):
     )
 
     def __init__(self, **kwargs):
-        super(SQLiteDB, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         if sqlite3 is None:
             raise ImportError("SQLiteDB requires sqlite3")
         if not self.table:
@@ -195,9 +201,9 @@ class SQLiteDB(BaseDB):
                 if app.profile_dir is not None:
                     self.location = app.profile_dir.location
                 else:
-                    self.location = u'.'
+                    self.location = '.'
             else:
-                self.location = u'.'
+                self.location = '.'
         self._init_db()
 
         # register db commit as 2s periodic callback
@@ -241,7 +247,7 @@ class SQLiteDB(BaseDB):
         for key in self._keys:
             if types[key] != self._types[key]:
                 self.log.warning(
-                    'type mismatch: %s: %s != %s' % (key, types[key], self._types[key])
+                    f'type mismatch: {key}: {types[key]} != {self._types[key]}'
                 )
                 return False
         return True
@@ -270,8 +276,7 @@ class SQLiteDB(BaseDB):
             i += 1
             self.table = first_table + '_%i' % i
             self.log.warning(
-                "Table %s exists and doesn't match db format, trying %s"
-                % (previous_table, self.table)
+                f"Table {previous_table} exists and doesn't match db format, trying {self.table}"
             )
             previous_table = self.table
 
@@ -325,7 +330,7 @@ class SQLiteDB(BaseDB):
 
         skeys = set(check.keys())
         skeys.difference_update(set(self._keys))
-        skeys.difference_update(set(['buffers', 'result_buffers']))
+        skeys.difference_update({'buffers', 'result_buffers'})
         if skeys:
             raise KeyError("Illegal testing key(s): %s" % skeys)
 
@@ -340,9 +345,9 @@ class SQLiteDB(BaseDB):
                         op, join = op
 
                     if value is None and op in null_operators:
-                        expr = "%s %s" % (name, null_operators[op])
+                        expr = f"{name} {null_operators[op]}"
                     else:
-                        expr = "%s %s ?" % (name, op)
+                        expr = f"{name} {op} ?"
                         if isinstance(value, (tuple, list)):
                             if op in null_operators and any([v is None for v in value]):
                                 # equality tests don't work with NULL
@@ -373,7 +378,7 @@ class SQLiteDB(BaseDB):
         d['msg_id'] = msg_id
         line = self._dict_to_list(d)
         tups = '(%s)' % (','.join(['?'] * len(line)))
-        self._db.execute("INSERT INTO '%s' VALUES %s" % (self.table, tups), line)
+        self._db.execute(f"INSERT INTO '{self.table}' VALUES {tups}", line)
         # self._db.commit()
 
     def get_record(self, msg_id):
@@ -409,7 +414,7 @@ class SQLiteDB(BaseDB):
     def drop_matching_records(self, check):
         """Remove a record from the DB."""
         expr, args = self._render_expression(check)
-        query = "DELETE FROM '%s' WHERE %s" % (self.table, expr)
+        query = f"DELETE FROM '{self.table}' WHERE {expr}"
         self._db.execute(query, args)
         # self._db.commit()
 
@@ -440,7 +445,7 @@ class SQLiteDB(BaseDB):
         else:
             req = '*'
         expr, args = self._render_expression(check)
-        query = """SELECT %s FROM '%s' WHERE %s""" % (req, self.table, expr)
+        query = f"""SELECT {req} FROM '{self.table}' WHERE {expr}"""
         cursor = self._db.execute(query, args)
         matches = cursor.fetchall()
         records = []

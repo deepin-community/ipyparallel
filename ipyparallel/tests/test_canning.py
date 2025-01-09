@@ -4,8 +4,7 @@ from binascii import b2a_hex
 from functools import partial
 
 from ipyparallel.serialize import canning
-from ipyparallel.serialize.canning import can
-from ipyparallel.serialize.canning import uncan
+from ipyparallel.serialize.canning import can, uncan
 
 
 def interactive(f):
@@ -99,7 +98,7 @@ def test_can_partial():
 
 def test_can_partial_buffers():
     def foo(arg1, arg2, kwarg1, kwarg2):
-        return '%s%s%s%s' % (arg1, arg2[:32], b2a_hex(kwarg1.tobytes()[:32]), kwarg2)
+        return f'{arg1}{arg2[:32]}{b2a_hex(kwarg1.tobytes()[:32])}{kwarg2}'
 
     buf1 = os.urandom(1024 * 1024)
     buf2 = memoryview(os.urandom(1024 * 1024))

@@ -1,5 +1,5 @@
-# coding: utf-8
 """Some generic utilities for dealing with classes, urls, and serialization."""
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 import asyncio
@@ -12,13 +12,9 @@ import shlex
 import socket
 import sys
 import warnings
-from datetime import datetime
-from datetime import timezone
+from datetime import datetime, timezone
 from functools import lru_cache
-from signal import SIGABRT
-from signal import SIGINT
-from signal import signal
-from signal import SIGTERM
+from signal import SIGABRT, SIGINT, SIGTERM, signal
 from types import FunctionType
 
 import traitlets
@@ -26,12 +22,10 @@ import zmq
 from dateutil.parser import parse as dateutil_parse
 from dateutil.tz import tzlocal
 from IPython import get_ipython
-from IPython.core.profiledir import ProfileDir
-from IPython.core.profiledir import ProfileDirError
+from IPython.core.profiledir import ProfileDir, ProfileDirError
 from IPython.paths import get_ipython_dir
-from jupyter_client.localinterfaces import is_public_ip
-from jupyter_client.localinterfaces import localhost
-from jupyter_client.localinterfaces import public_ips
+from jupyter_client import session
+from jupyter_client.localinterfaces import is_public_ip, localhost, public_ips
 from tornado.ioloop import IOLoop
 from traitlets.log import get_logger
 from zmq.log import handlers
@@ -163,7 +157,7 @@ def validate_url(url):
         try:
             port = int(s_port)
         except ValueError:
-            raise AssertionError("Invalid port %r in url: %r" % (port, url))
+            raise AssertionError(f"Invalid port {port!r} in url: {url!r}")
 
         assert addr == '*' or pat.match(addr) is not None, 'Invalid url: %r' % url
 
@@ -205,7 +199,7 @@ def is_ip(location):
     return bool(re.match(location, r'(\d+\.){3}\d+'))
 
 
-@lru_cache()
+@lru_cache
 def ip_for_host(host):
     """Get the ip address for a host
 
@@ -216,7 +210,7 @@ def ip_for_host(host):
         return socket.gethostbyname_ex(host)[2][0]
     except Exception as e:
         warnings.warn(
-            "IPython could not determine IPs for %s: %s" % (host, e), RuntimeWarning
+            f"IPython could not determine IPs for {host}: {e}", RuntimeWarning
         )
         return host
 
@@ -276,7 +270,7 @@ def disambiguate_url(url, location=None):
 
     ip = disambiguate_ip_address(ip, location)
 
-    return "%s://%s:%s" % (proto, ip, port)
+    return f"{proto}://{ip}:{port}"
 
 
 # --------------------------------------------------------------------------
@@ -314,7 +308,7 @@ def _push(**ns):
     try:
         for name, value in ns.items():
             user_ns[tmp] = value
-            exec("%s = %s" % (name, tmp), user_ns)
+            exec(f"{name} = {tmp}", user_ns)
     finally:
         user_ns.pop(tmp, None)
 
@@ -490,15 +484,15 @@ def become_dask_worker(address, nanny=False, **kwargs):
     if getattr(kernel, 'dask_worker', None) is not None:
         kernel.log.info("Dask worker is already running.")
         return
-    from distributed import Worker, Nanny
+    from distributed import Nanny, Worker
 
     if nanny:
         w = Nanny(address, **kwargs)
     else:
         w = Worker(address, **kwargs)
-    shell.user_ns['dask_worker'] = shell.user_ns[
-        'distributed_worker'
-    ] = kernel.distributed_worker = w
+    shell.user_ns['dask_worker'] = shell.user_ns['distributed_worker'] = (
+        kernel.distributed_worker
+    ) = w
     kernel.io_loop.add_callback(w.start)
 
 
@@ -543,7 +537,7 @@ def _ensure_tzinfo(dt):
     if not dt.tzinfo:
         # No more naïve datetime objects!
         warnings.warn(
-            u"Interpreting naïve datetime as local %s. Please add timezone info to timestamps."
+            "Interpreting naïve datetime as local %s. Please add timezone info to timestamps."
             % dt,
             DeprecationWarning,
             stacklevel=4,
@@ -599,25 +593,20 @@ def compare_datetimes(a, b):
 
 def utcnow():
     """Timezone-aware UTC timestamp"""
-    return datetime.utcnow().replace(tzinfo=utc)
+    return datetime.now(utc)
 
 
-def _patch_jupyter_client_dates():
-    """Monkeypatch jupyter_client.extract_dates to be nondestructive wrt timezone info"""
-    import jupyter_client
-    from distutils.version import LooseVersion as V
-
-    if V(jupyter_client.__version__) < V('5.0'):
-        from jupyter_client import session
-
-        if hasattr(session, '_save_extract_dates'):
-            return
-        session._save_extract_dates = session.extract_dates
-        session.extract_dates = extract_dates
+def _v(version_s):
+    return tuple(int(s) for s in re.findall(r"\d+", version_s))
 
 
-# FIXME: remove patch when we require jupyter_client 5.0
-_patch_jupyter_client_dates()
+@lru_cache
+def _disable_session_extract_dates():
+    """Monkeypatch jupyter_client.extract_dates to be a no-op
+
+    avoids performance problem parsing unused timestamp strings
+    """
+    session.extract_dates = lambda obj: obj
 
 
 def progress(*args, widget=None, **kwargs):
@@ -663,6 +652,8 @@ def abbreviate_profile_dir(profile_dir):
 def _all_profile_dirs():
     """List all IPython profile directories"""
     profile_dirs = []
+    if not os.path.isdir(get_ipython_dir()):
+        return profile_dirs
     with os.scandir(get_ipython_dir()) as paths:
         for path in paths:
             if path.is_dir() and path.name.startswith('profile_'):
@@ -747,6 +738,10 @@ def _traitlet_signature(cls):
         if name.startswith("_"):
             # omit private traits
             continue
+        if trait.metadata.get("nosignature"):
+            continue
+        if "alias" in trait.metadata:
+            name = trait.metadata["alias"]
         if hasattr(trait, 'default'):
             # traitlets 5
             default = trait.default()

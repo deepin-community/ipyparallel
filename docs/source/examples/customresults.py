@@ -9,6 +9,7 @@ Authors
 -------
 * MinRK
 """
+
 import random
 
 import ipyparallel as ipp
@@ -26,7 +27,8 @@ print(dv['id'])
 
 def sleep_here(count, t):
     """simple function that takes args, prints a short message, sleeps for a time, and returns the same args"""
-    import time, sys
+    import sys
+    import time
 
     print("hi from engine %i" % id)
     sys.stdout.flush()
@@ -57,5 +59,5 @@ while pending:
 
         # note that each job in a map always returns a list of length chunksize
         # even if chunksize == 1
-        for (count, t) in ar.get():
+        for count, t in ar.get():
             print("  item %i: slept for %.2fs" % (count, t))

@@ -1,5 +1,4 @@
 """toplevel setup/teardown for parallel tests."""
-from __future__ import print_function
 
 import asyncio
 import os
@@ -8,13 +7,14 @@ from subprocess import Popen
 
 from IPython.paths import get_ipython_dir
 
-from ipyparallel import Client
-from ipyparallel import error
-from ipyparallel.cluster.launcher import ipcontroller_cmd_argv
-from ipyparallel.cluster.launcher import ipengine_cmd_argv
-from ipyparallel.cluster.launcher import LocalProcessLauncher
-from ipyparallel.cluster.launcher import ProcessStateError
-from ipyparallel.cluster.launcher import SIGKILL
+from ipyparallel import Client, error
+from ipyparallel.cluster.launcher import (
+    SIGKILL,
+    LocalProcessLauncher,
+    ProcessStateError,
+    ipcontroller_cmd_argv,
+    ipengine_cmd_argv,
+)
 
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
@@ -39,17 +39,17 @@ class TestProcessLauncher(LocalProcessLauncher):
             raise ProcessStateError(s)
 
 
+# show tracebacks for RemoteErrors
+class RemoteErrorWithTB(error.RemoteError):
+    def __str__(self):
+        s = super().__str__()
+        return '\n'.join([s, self.traceback or ''])
+
+
 # global setup/teardown
 
 
 def setup():
-
-    # show tracebacks for RemoteErrors
-    class RemoteErrorWithTB(error.RemoteError):
-        def __str__(self):
-            s = super(RemoteErrorWithTB, self).__str__()
-            return '\n'.join([s, self.traceback or ''])
-
     error.RemoteError = RemoteErrorWithTB
 
     cluster_dir = os.path.join(get_ipython_dir(), 'profile_iptest')
@@ -138,5 +138,5 @@ def teardown():
             try:
                 print('cleaning up test process...')
                 p.signal(SIGKILL)
-            except:
+            except Exception:
                 print("couldn't shutdown process: ", p)

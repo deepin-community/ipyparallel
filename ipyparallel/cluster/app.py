@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-# encoding: utf-8
 """The ipcluster application."""
-from __future__ import print_function
 
 import asyncio
 import errno
@@ -16,23 +14,13 @@ from functools import partial
 import entrypoints
 import zmq
 from IPython.core.profiledir import ProfileDir
-from traitlets import Bool
-from traitlets import CaselessStrEnum
-from traitlets import default
-from traitlets import Dict
-from traitlets import Integer
-from traitlets import List
+from traitlets import Bool, CaselessStrEnum, Dict, Integer, List, default
 from traitlets.config.application import catch_config_error
 
 from ipyparallel._version import __version__
-from ipyparallel.apps.baseapp import base_aliases
-from ipyparallel.apps.baseapp import base_flags
-from ipyparallel.apps.baseapp import BaseParallelApplication
-from ipyparallel.cluster import clean_cluster_files
-from ipyparallel.cluster import Cluster
-from ipyparallel.cluster import ClusterManager
+from ipyparallel.apps.baseapp import BaseParallelApplication, base_aliases, base_flags
+from ipyparallel.cluster import Cluster, ClusterManager, clean_cluster_files
 from ipyparallel.util import abbreviate_profile_dir
-
 
 # -----------------------------------------------------------------------------
 # Module level variables
@@ -141,7 +129,7 @@ stop_flags.update(base_flags)
 
 
 class IPClusterStop(BaseParallelApplication):
-    name = u'ipcluster'
+    name = 'ipcluster'
     description = stop_help
     examples = _stop_examples
 
@@ -198,7 +186,7 @@ class IPClusterStop(BaseParallelApplication):
                 tasks.append(cluster.stop_cluster())
             await asyncio.gather(*tasks)
 
-        asyncio.get_event_loop().run_until_complete(_stop_all())
+        asyncio.run(_stop_all())
 
 
 list_aliases = {}
@@ -339,8 +327,7 @@ engine_flags.update(
 
 
 class IPClusterEngines(BaseParallelApplication):
-
-    name = u'ipcluster'
+    name = 'ipcluster'
     description = engines_help
     examples = _engines_examples
     usage = None
@@ -387,7 +374,7 @@ class IPClusterEngines(BaseParallelApplication):
 
     @catch_config_error
     def initialize(self, argv=None):
-        super(IPClusterEngines, self).initialize(argv)
+        super().initialize(argv)
         self.init_signal()
         self.init_cluster()
 
@@ -455,7 +442,7 @@ class IPClusterEngines(BaseParallelApplication):
     async def start_engines(self):
         try:
             await self.cluster.start_engines()
-        except:
+        except BaseException:
             self.log.exception("Engine start failed")
             self.exit(1)
 
@@ -467,8 +454,7 @@ class IPClusterEngines(BaseParallelApplication):
 
     def watch_engines(self):
         """Watch for early engine shutdown"""
-        # FIXME: public API to get launcher instances?
-        self.engine_launcher = next(iter(self.cluster.engines.values()))
+        self.engine_launcher = self.cluster.engine_set
 
         if not self.early_shutdown:
             self.engine_launcher.on_stop(self.engines_stopped)
@@ -559,8 +545,7 @@ start_aliases['clean-logs'] = 'IPClusterStart.clean_logs'
 
 
 class IPClusterStart(IPClusterEngines):
-
-    name = u'ipcluster'
+    name = 'ipcluster'
     description = start_help
     examples = _start_examples
     default_log_level = logging.INFO
@@ -643,7 +628,13 @@ class IPClusterNBExtension(BaseParallelApplication):
 
     name = 'ipcluster-nbextension'
 
-    description = """Enable/disable IPython clusters tab in Jupyter notebook
+    description = """(DEPRECATED) Enable/disable IPython clusters tab in classic Jupyter notebook
+
+    Only for the deprecated jupyter-notebook < 7.0.
+
+    For current jupyter-server implementations (jupyterlab and jupyter-notebook 7):
+
+        jupyter server extension enable ipyparallel
 
     for Jupyter Notebook >= 4.2, you can use the new nbextension API:
 
@@ -670,23 +661,43 @@ class IPClusterNBExtension(BaseParallelApplication):
     )
 
     def start(self):
-        from ipyparallel.nbextension.install import install_extensions
-
         if len(self.extra_args) != 1:
             self.exit("Must specify 'enable' or 'disable'")
         action = self.extra_args[0].lower()
+
+        print(
+            "WARNING: `ipcluster nbextension` is deprecated. Use `jupyter server extension enable ipyparallel`",
+            file=sys.stderr,
+        )
+
+        from ipyparallel.util import _v
+
+        try:
+            import notebook
+        except ImportError:
+            self.exit(
+                "Deprecated `ipcluster nbextension` requires `notebook<7`, no `notebook` package found."
+            )
+
+        if _v(notebook.__version__) >= _v('7'):
+            self.exit(
+                "Deprecated `ipcluster nbextension` requires `notebook<7`, found `notebook=={notebook.__version__}`."
+            )
+
+        from ipyparallel.nbextension.install import install_extensions
+
         if action == 'enable':
-            print("Enabling IPython clusters tab")
+            print("Enabling IPython clusters tab", file=sys.stderr)
             install_extensions(enable=True, user=self.user)
         elif action == 'disable':
-            print("Disabling IPython clusters tab")
+            print("Disabling IPython clusters tab", file=sys.stderr)
             install_extensions(enable=False, user=self.user)
         else:
             self.exit("Must specify 'enable' or 'disable', not '%s'" % action)
 
 
 class IPCluster(BaseParallelApplication):
-    name = u'ipcluster'
+    name = 'ipcluster'
     description = _description
     examples = _main_examples
     version = __version__
@@ -708,7 +719,7 @@ class IPCluster(BaseParallelApplication):
 
     def start(self):
         if self.subapp is None:
-            keys = ', '.join("'{}'".format(key) for key in self.subcommands.keys())
+            keys = ', '.join(f"'{key}'" for key in self.subcommands.keys())
             print("No subcommand specified. Must specify one of: %s" % keys)
             print()
             self.print_description()

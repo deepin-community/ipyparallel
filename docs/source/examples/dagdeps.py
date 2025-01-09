@@ -6,6 +6,7 @@ Authors
 -------
 * MinRK
 """
+
 from random import randint
 
 import networkx as nx
@@ -75,10 +76,7 @@ def validate_tree(G, results):
         started = results[node].metadata.started
         for parent in G.predecessors(node):
             finished = results[parent].metadata.completed
-            assert started > finished, "%s should have happened after %s" % (
-                node,
-                parent,
-            )
+            assert started > finished, f"{node} should have happened after {parent}"
 
 
 def main(nodes, edges):
@@ -89,8 +87,8 @@ def main(nodes, edges):
     point at least slightly to the right if the graph is valid.
     """
     from matplotlib import pyplot as plt
-    from matplotlib.dates import date2num
     from matplotlib.cm import gist_rainbow
+    from matplotlib.dates import date2num
 
     print("building DAG")
     G = random_dag(nodes, edges)

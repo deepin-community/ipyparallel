@@ -1,16 +1,24 @@
-Description: Use /etc/ for config files, instead of /usr/etc
-Author: Joseph Nahmias <joe@nahmias.net>
+From: Joseph Nahmias <joe@nahmias.net>
+Date: Wed, 30 Oct 2024 15:14:29 +0100
+Subject: Use /etc/ for config files, instead of /usr/etc
+
 Bug-Debian: https://bugs.debian.org/969708
 Last-Update: 2021-10-01
 Forwarded: not-needed
---- ipyparallel.orig/setup.py
-+++ ipyparallel/setup.py
-@@ -37,7 +37,7 @@
- data_files_spec = [
-     # all extension-enabling config files
-     (
--        'etc/jupyter',
-+        '/etc/jupyter',
-         'etc/jupyter',
-         '**',
-     ),
+---
+ pyproject.toml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pyproject.toml b/pyproject.toml
+index 83cc03d..ffaab4b 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -102,7 +102,7 @@ artifacts = [
+ ]
+ 
+ [tool.hatch.build.targets.wheel.shared-data]
+-"jupyter-config" = "etc/jupyter"
++"jupyter-config" = "/etc/jupyter"
+ "ipyparallel/nbextension/static" = "share/jupyter/nbextensions/ipyparallel"
+ "ipyparallel/labextension" = "share/jupyter/labextensions/ipyparallel-labextension"
+ 

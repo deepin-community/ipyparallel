@@ -1,0 +1,20 @@
+From: Roland Mas <lolando@debian.org>
+Date: Wed, 30 Oct 2024 15:14:43 +0100
+Subject: Define asyncio_default_fixture_loop_scope for pytest-asyncio >= 0.24
+
+---
+ pyproject.toml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/pyproject.toml b/pyproject.toml
+index ffaab4b..a4861bf 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -120,6 +120,7 @@ profile = "black"
+ [tool.pytest.ini_options]
+ addopts = "-raXs --durations 10 --color=yes"
+ asyncio_mode = "auto"
++asyncio_default_fixture_loop_scope="function"
+ testpaths = [
+     "ipyparallel/tests"
+ ]

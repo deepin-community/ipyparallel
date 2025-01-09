@@ -4,6 +4,250 @@
 
 Changes in IPython Parallel
 
+## 8.8
+
+### 8.8.0 - 2024-04-02
+
+([full changelog](https://github.com/ipython/ipyparallel/compare/8.7.0...8.8.0))
+
+8.8 is a small release.
+
+New:
+
+- `BroadcastView.map` is defined for API compatibility, but is not particularly efficient or recommended.
+
+Fixed:
+
+- `AsyncResult.join` is fixed.
+
+Improved:
+
+- Performance optimization disabling timestamp parsing in `jupyter_client` is not applied until ipyparallel classes are instantiated,
+  rather than at import time.
+
+## 8.7
+
+### 8.7.0 - 2024-03-04
+
+([full changelog](https://github.com/ipython/ipyparallel/compare/8.6.1...8.7.0))
+
+8.7 is a small release, with a few improvements and updates, mostly related to compatibility with different versions of JupyterLab, Notebook, and Jupyter Server.
+
+Highlights:
+
+- JupyterLab 4 compatibility for the lab extension
+- Improved logging and deprecation messages for different versions of Jupyter Server and Notebook
+
+#### New features added
+
+- Update labextension to jupyterlab 4 [#833](https://github.com/ipython/ipyparallel/pull/833) ([@minrk](https://github.com/minrk))
+- add `ControllerLauncher.connection_info_timeout` config [#872](https://github.com/ipython/ipyparallel/pull/872) ([@minrk](https://github.com/minrk))
+
+#### Enhancements made
+
+- log launcher output at warning-level in case of nonzero exit code [#866](https://github.com/ipython/ipyparallel/pull/866) ([@minrk](https://github.com/minrk))
+- improve deprecation messaging around `ipcluster nbextension` [#835](https://github.com/ipython/ipyparallel/pull/835) ([@minrk](https://github.com/minrk))
+
+#### Bugs fixed
+
+- Use pre-3.10 serialization code on PyPy3.10 [#846](https://github.com/ipython/ipyparallel/pull/846) ([@mgorny](https://github.com/mgorny), [@minrk](https://github.com/minrk))
+- fallback import when using notebook and jupyter_server is unavailable [#808](https://github.com/ipython/ipyparallel/pull/808) ([@minrk](https://github.com/minrk))
+- don't propagate logs in IPython [#797](https://github.com/ipython/ipyparallel/pull/797) ([@minrk](https://github.com/minrk))
+
+#### Contributors to this release
+
+The following people contributed discussions, new ideas, code and documentation contributions, and review.
+See [our definition of contributors](https://github-activity.readthedocs.io/en/latest/#how-does-this-tool-define-contributions-in-the-reports).
+
+([GitHub contributors page for this release](https://github.com/ipython/ipyparallel/graphs/contributors?from=2023-04-14&to=2024-03-04&type=c))
+
+@ellert ([activity](https://github.com/search?q=repo%3Aipython%2Fipyparallel+involves%3Aellert+updated%3A2023-04-14..2024-03-04&type=Issues)) | @hroncok ([activity](https://github.com/search?q=repo%3Aipython%2Fipyparallel+involves%3Ahroncok+updated%3A2023-04-14..2024-03-04&type=Issues)) | @mgorny ([activity](https://github.com/search?q=repo%3Aipython%2Fipyparallel+involves%3Amgorny+updated%3A2023-04-14..2024-03-04&type=Issues)) | @minrk ([activity](https://github.com/search?q=repo%3Aipython%2Fipyparallel+involves%3Aminrk+updated%3A2023-04-14..2024-03-04&type=Issues)) | @ottointhesky ([activity](https://github.com/search?q=repo%3Aipython%2Fipyparallel+involves%3Aottointhesky+updated%3A2023-04-14..2024-03-04&type=Issues)) | @tornaria ([activity](https://github.com/search?q=repo%3Aipython%2Fipyparallel+involves%3Atornaria+updated%3A2023-04-14..2024-03-04&type=Issues)) | @WernerFS ([activity](https://github.com/search?q=repo%3Aipython%2Fipyparallel+involves%3AWernerFS+updated%3A2023-04-14..2024-03-04&type=Issues))
+
+## 8.6
+
+### 8.6.1
+
+([full changelog](https://github.com/ipython/ipyparallel/compare/8.6.0...8.6.1))
+
+### Bugs fixed
+
+- avoid errors when engine id cannot be identified [#793](https://github.com/ipython/ipyparallel/pull/793) ([@minrk](https://github.com/minrk))
+- Disable variable expansion in %px [#792](https://github.com/ipython/ipyparallel/pull/792) ([@minrk](https://github.com/minrk))
+- fix wait_interactive(return_when=FIRST_EXCEPTION) when there are no errors [#790](https://github.com/ipython/ipyparallel/pull/790) ([@minrk](https://github.com/minrk))
+
+### 8.6.0
+
+A tiny release fixing issues seen building notebooks with jupyter-book.
+
+([full changelog](https://github.com/ipython/ipyparallel/compare/8.5.1...8.6.0))
+
+- Fix KeyError on parent_header when streaming output with %%px
+- Allow disabling streaming/progress defaults with IPP_NONINTERACTIVE=1 environment variable (e.g. when building notebooks in documentation)
+
+## 8.5
+
+### 8.5.1
+
+A tiny bugfix release
+
+([full changelog](https://github.com/ipython/ipyparallel/compare/8.5.0...8.5.1))
+
+- Fix error preventing creation of new profiles via the lab extension
+
+### 8.5.0
+
+A small bugfix and compatibility release.
+
+([full changelog](https://github.com/ipython/ipyparallel/compare/8.4.1...8.5.0))
+
+- Updates dependencies in jupyterlab extension to jupyterlab 3.6
+- fix ResourceWarnings about closed clusters
+- Avoid some deprecated APIs in jupyter-client and pyzmq
+
+## 8.4
+
+### 8.4.1
+
+([full changelog](https://github.com/ipython/ipyparallel/compare/8.4.0...8.4.1))
+
+8.4.1 is a tiny release, adding support for Python 3.11
+
+### 8.4.0
+
+([full changelog](https://github.com/ipython/ipyparallel/compare/8.3.0...8.4.0))
+
+8.4.0 is a small release, with some bugfixes and improvements to the release process.
+
+Bugfixes:
+
+- (`%px`) only skip redisplay of streamed errors if outputs are complete
+
+Compatibility improvements:
+
+- Avoid use of recently deprecated asyncio/tornado APIs
+  around 'current' event loops that are not running.
+
+Build improvements:
+
+- Switch to hatch backend for packaging
+
+## 8.3
+
+### 8.3.0
+
+([full changelog](https://github.com/ipython/ipyparallel/compare/8.2.1...8.3.0))
+
+8.3.0 is a small release, with some bugfixes and improvements to the release process.
+
+Build fixes:
+
+- Workaround SSL issues with recent builds of nodejs + webpack
+- Build with flit, removing setup.py
+
+Fixes:
+
+- Remove remaining references to deprecated `distutils` package (has surprising impact on process memory)
+- Improve logging when engine registration times out
+
+Maintenance changes that shouldn't affect users:
+
+- Releases are now built with pip instead of `setup.py`
+- Updates to autoformatting configuration
+
+#### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/ipython/ipyparallel/graphs/contributors?from=2022-04-01&to=2022-05-09&type=c))
+
+[@blink1073](https://github.com/search?q=repo%3Aipython%2Fipyparallel+involves%3Ablink1073+updated%3A2022-04-01..2022-05-09&type=Issues) | [@dependabot](https://github.com/search?q=repo%3Aipython%2Fipyparallel+involves%3Adependabot+updated%3A2022-04-01..2022-05-09&type=Issues) | [@jburroni](https://github.com/search?q=repo%3Aipython%2Fipyparallel+involves%3Ajburroni+updated%3A2022-04-01..2022-05-09&type=Issues) | [@kloczek](https://github.com/search?q=repo%3Aipython%2Fipyparallel+involves%3Akloczek+updated%3A2022-04-01..2022-05-09&type=Issues) | [@minrk](https://github.com/search?q=repo%3Aipython%2Fipyparallel+involves%3Aminrk+updated%3A2022-04-01..2022-05-09&type=Issues) | [@pre-commit-ci](https://github.com/search?q=repo%3Aipython%2Fipyparallel+involves%3Apre-commit-ci+updated%3A2022-04-01..2022-05-09&type=Issues)
+
+## 8.2
+
+### 8.2.1
+
+8.2.1 Fixes some compatibility issues with latest dask, ipykernel, and setuptools,
+as well as some typos and improved documentation.
+
+### 8.2.0
+
+8.2.0 is a small release, mostly of small bugfixes and improvements.
+
+Changes:
+
+`len(AsyncMapResult)` and progress ports now use the number of items in the map,
+not the number of messages.
+
+Enhancements:
+
+- Show output prior to errors in `%%px`
+
+Bugs fixed:
+
+- Fix cases where engine id could be `-1` in tracebacks
+- Add missing `pbs` to engine launcher entrypoints
+
+[All changes on GitHub](https://github.com/ipython/ipyparallel/compare/8.1.0...8.2.0)
+
+## 8.1
+
+8.1.0 is a small release, adding a few new features and bugfixes.
+
+New features:
+
+- relay KeyboardInterrupt to engines in blocking `%px` magics
+- add `Cluster.start_and_connect(activate=True)` to include activation of `%px` magics in one-liner startup.
+- initial support for Clusters tab in RetroLab
+
+Fixes:
+
+- ensure profile config is always loaded for `Cluster(profile="xyz")`
+- build lab extension in production mode, apply trove classifiers
+- pass through keyword arguments to constructor in `Client.broadcast_view`
+
+## 8.0
+
+This is marked as a major revision because of the change to pass connection information via environment variables.
+BatchSystem launchers with a custom template will need to make sure to set flags that inherit environment variables,
+such as `#PBS -V` or `#SBATCH --export=ALL`.
+
+New:
+
+- More convenient `Cluster(engines="mpi")` signature for setting the engine (or controller) launcher class.
+- The first (and usually only) engine set can be accessed as {attr}`.Cluster.engine_set`,
+  rather than digging through the {attr}`Cluster.engines` dict.
+- Add `environment` configuration to all Launchers.
+- Support more configuration via environment variables,
+  including passing connection info to engines via `$IPP_CONNECTION_INFO`,
+  which is used by default, avoiding the need to send connection files to engines in
+  cases of non-shared filesystems.
+- Launchers send connection info to engines via `$IPP_CONNECTION_INFO` by default.
+  This is governed by `Cluster.send_engines_connection_env`, which is True by default.
+- Support {meth}`EngineLauncher.get_output` via output files in batch system launchers
+- Capture output in Batch launchers by setting output file options in the default templates.
+- {meth}`LoadBalancedView.imap` returns a `LazyMapIterator` which has a `.cancel()` method,
+  for stopping consumption of the map input.
+- Support for `return_when` argument in {meth}`.AsyncResult.wait` and {meth}`~.AsyncResult.wait_interactive`,
+  to allow returning on the first error, first completed, or (default) all completed.
+
+Improved:
+
+- {meth}`LoadBalancedView.imap(max_outstanding=n)` limits the number of tasks submitted to the cluster,
+  instead of limiting the number not-yet-consumed.
+  Prior to this, the cluster could be idle if several results were waiting to be consumed.
+- output streamed by `%%px` includes errors and results, for immediate feedback when only one engine fails.
+
+Fixed:
+
+- Various bugs preventing use of non-default Controller launchers
+- Fixed crash in jupyterlab extension when IPython directory does not exist
+- `ViewExecutor.shutdown()` waits for `imap` results, like Executors in the standard library
+- Removed spurious jupyterlab plugin options that had no effect.
+- `%autopx` streams output just like `%%px`
+
+Maintenance:
+
+- Add BroadcastView benchmark code
+- Tag releases with tbump
+
 ## 7.1
 
 New:
@@ -57,7 +301,7 @@ New features:
 
 - New {class}`.Cluster` API for managing clusters from Python,
   including support for signaling and restarting engines.
-  See [docs](../examples/Cluster%20API.ipynb) for more.
+  See [docs](./examples/Cluster%20API.ipynb) for more.
 - New `ipcluster list` and `ipcluster clean` commands derived from the Cluster API.
 - New {meth}`.Client.send_signal` for sending signals to single engines.
 - New KernelNanny process for signaling and monitoring engines
@@ -77,7 +321,7 @@ New features:
   producing a generator of results instead of an AsyncMapResult,
   allowing for consumption of very large or infinite mapping inputs.
 
-[broadcast view documentation]: ../examples/broadcast/Broadcast%20view.ipynb
+[broadcast view documentation]: ./examples/broadcast/Broadcast%20view.ipynb
 [master's thesis]: https://urn.nb.no/URN:NBN:no-84589
 
 Improvements and other fixes:
@@ -235,7 +479,7 @@ which does all three steps above.
 
 ### Slurm support
 
-[Slurm](https://hpc.llnl.gov/training/tutorials/livermore-computing-linux-commodity-clusters-overview-part-one) support is added to ipcluster.
+[Slurm](https://hpc.llnl.gov/documentation/tutorials/livermore-computing-linux-commodity-clusters-overview-part-two) support is added to ipcluster.
 
 ### 5.1.0
 

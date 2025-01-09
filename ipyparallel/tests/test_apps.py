@@ -1,21 +1,17 @@
 """Test CLI application behavior"""
+
 import glob
 import json
 import os
 import sys
 import time
 import types
-from subprocess import check_call
-from subprocess import check_output
-from subprocess import Popen
-from unittest.mock import create_autospec
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from subprocess import Popen, check_call, check_output
+from unittest.mock import MagicMock, create_autospec, patch
 
 import pytest
 import zmq
-from ipykernel import iostream
-from ipykernel import kernelapp
+from ipykernel import iostream, kernelapp
 from ipykernel.ipkernel import IPythonKernel
 from IPython.core.profiledir import ProfileDir
 from tornado import ioloop
@@ -115,6 +111,7 @@ def test_bind_kernel(request):
             io_loop=create_autospec(spec=ioloop.IOLoop, spec_set=True, instance=True),
         )
     ]
+
     app.kernel.control_stream = zmqstream.ZMQStream(
         socket=socket_spec(),
         io_loop=create_autospec(spec=ioloop.IOLoop, spec_set=True, instance=True),
@@ -122,6 +119,7 @@ def test_bind_kernel(request):
 
     # testing the case iopub_socket is not replaced with IOPubThread
     iopub_socket = socket_spec()
+
     app.kernel.iopub_socket = iopub_socket
     assert isinstance(app.kernel.iopub_socket, zmq.Socket)
     bind_kernel(app)
@@ -155,7 +153,6 @@ def ipcluster_list(*args):
 
 
 def test_ipcluster_list(Cluster):
-
     # no clusters
     out = ipcluster_list()
     assert len(out.splitlines()) == 1
@@ -230,6 +227,7 @@ def test_ipcluster_start_stop(request, ipython_dir, daemonize):
 
     # cluster running, try to connect with default args
     cluster = ipp.Cluster.from_file(log_level=10)
+
     try:
         with cluster.connect_client_sync() as rc:
             rc.wait_for_engines(n=2, timeout=60)

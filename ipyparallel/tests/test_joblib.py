@@ -1,14 +1,18 @@
+import warnings
 from unittest import mock
 
 import pytest
 
 import ipyparallel as ipp
-from .clienttest import add_engines
-from .clienttest import ClusterTestCase
+
+from .clienttest import ClusterTestCase, add_engines
 
 try:
-    from joblib import Parallel, delayed
-    from ipyparallel.client._joblib import IPythonParallelBackend  # noqa
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        from joblib import Parallel, delayed
+
+        from ipyparallel.client._joblib import IPythonParallelBackend  # noqa
 except (ImportError, TypeError):
     have_joblib = False
 else:
@@ -20,10 +24,10 @@ def neg(x):
 
 
 class TestJobLib(ClusterTestCase):
-    def setUp(self):
+    def setup_method(self):
         if not have_joblib:
             pytest.skip("Requires joblib >= 0.10")
-        super(TestJobLib, self).setUp()
+        super().setup_method()
         add_engines(1, total=True)
 
     def test_default_backend(self):
@@ -37,11 +41,11 @@ class TestJobLib(ClusterTestCase):
         view = self.client.load_balanced_view()
         view.register_joblib_backend('view')
         p = Parallel(backend='view')
-        self.assertIs(p._backend._view, view)
+        assert p._backend._view is view
 
     def test_joblib_backend(self):
         view = self.client.load_balanced_view()
         view.register_joblib_backend('view')
         p = Parallel(backend='view')
         result = p(delayed(neg)(i) for i in range(10))
-        self.assertEqual(result, [neg(i) for i in range(10)])
+        assert result == [neg(i) for i in range(10)]

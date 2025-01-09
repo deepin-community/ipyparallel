@@ -14,6 +14,7 @@ all 1, 2, n digits sequences occur in the digits of pi.
 If the digits of pi are truly random, these frequencies
 should be equal.
 """
+
 import os
 from urllib.request import urlretrieve
 
@@ -81,7 +82,7 @@ def txt_file_to_digits(filename, the_type=str):
     """
     Yield the digits of pi read from a .txt file.
     """
-    with open(filename, 'r') as f:
+    with open(filename) as f:
         for line in f.readlines():
             for c in line:
                 if c != '\n' and c != ' ':

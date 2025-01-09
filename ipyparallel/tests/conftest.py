@@ -1,12 +1,13 @@
 """pytest fixtures"""
+
 import inspect
 import logging
 import os
 import sys
 from contextlib import contextmanager
-from subprocess import check_call
-from subprocess import check_output
-from tempfile import TemporaryDirectory
+from pathlib import Path
+from subprocess import check_call, check_output
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from unittest import mock
 
 import IPython.paths
@@ -14,20 +15,32 @@ import pytest
 import zmq
 from IPython.core.profiledir import ProfileDir
 from IPython.terminal.interactiveshell import TerminalInteractiveShell
-from IPython.testing.tools import default_config
 from traitlets.config import Config
 
 import ipyparallel as ipp
-from . import setup
-from . import teardown
+
+from . import setup, teardown
+
+
+def default_config():
+    """Return a config object with good defaults for testing."""
+    config = Config()
+    config.TerminalInteractiveShell.colors = 'NoColor'
+    config.TerminalTerminalInteractiveShell.term_title = (False,)
+    config.TerminalInteractiveShell.autocall = 0
+    f = NamedTemporaryFile(suffix='test_hist.sqlite', delete=False)
+    config.HistoryManager.hist_file = str(Path(f.name))
+    f.close()
+    config.HistoryManager.db_cache_size = 10000
+    return config
 
 
 @contextmanager
-def temporary_ipython_dir():
+def temporary_ipython_dir(prefix=None):
     # FIXME: cleanup has issues on Windows
     # this is *probably* a real bug of holding open files,
     # but it is preventing feedback about test failures
-    td_obj = TemporaryDirectory(suffix=".ipython")
+    td_obj = TemporaryDirectory(suffix=".ipython", prefix=prefix)
     td = td_obj.name
 
     with mock.patch.dict(os.environ, {"IPYTHONDIR": td}):
@@ -103,7 +116,31 @@ def Context():
 
 
 @pytest.fixture
-def Cluster(request, ipython_dir, io_loop):
+def engine_launcher_class():
+    """override to test an alternate launcher"""
+    return 'local'
+
+
+@pytest.fixture
+def controller_launcher_class():
+    """override to test an alternate launcher"""
+    return 'local'
+
+
+@pytest.fixture
+def cluster_config():
+    """Override to set default cluster config"""
+    return Config()
+
+
+@pytest.fixture
+def Cluster(
+    request,
+    ipython_dir,
+    controller_launcher_class,
+    engine_launcher_class,
+    cluster_config,
+):
     """Fixture for instantiating Clusters"""
 
     def ClusterConstructor(**kwargs):
@@ -111,9 +148,10 @@ def Cluster(request, ipython_dir, io_loop):
         log.setLevel(logging.DEBUG)
         log.handlers = [logging.StreamHandler(sys.stdout)]
         kwargs['log'] = log
-        engine_launcher_class = kwargs.get("engine_launcher_class")
 
-        cfg = kwargs.setdefault("config", Config())
+        kwargs.setdefault("controller", controller_launcher_class)
+        kwargs.setdefault("engines", engine_launcher_class)
+        cfg = kwargs.setdefault("config", cluster_config)
         cfg.EngineLauncher.engine_args = ['--log-level=10']
         cfg.ControllerLauncher.controller_args = ['--log-level=10']
         kwargs.setdefault("controller_args", ['--ping=250'])

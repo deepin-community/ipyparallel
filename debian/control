@@ -2,21 +2,44 @@ Source: ipyparallel
 Section: python
 Priority: optional
 Maintainer: Debian Python Team <team+python@tracker.debian.org>
-Uploaders: Joseph Nahmias <jello@debian.org>
-Build-Depends: debhelper-compat (= 13), dh-python,
- python3-all, python3-setuptools,
- python3-ipython-genutils, python3-decorator, python3-zmq,
- python3-traitlets, python3-ipython, python3-jupyter-client,
- python3-ipykernel, python3-tornado, python3-dateutil, python3-psutil,
+Uploaders:
+ Joseph Nahmias <jello@debian.org>
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-sequence-python3,
+ pandoc <!nodoc>,
+ pybuild-plugin-pyproject,
+ python-ipython-doc <!nodoc>,
+ python-jupyter-client-doc <!nodoc>,
+ python-pymongo-doc <!nodoc>,
+ python3-all,
+ python3-autodoc-traits <!nodoc>,
+ python3-dateutil,
+ python3-decorator,
+ python3-doc <!nodoc>,
+ python3-entrypoints,
+ python3-hatchling,
+ python3-ipykernel,
+ python3-ipython,
+ python3-jupyter-client,
+ python3-matplotlib <!nodoc>,
+ python3-myst-nb <!nodoc>,
+ python3-myst-parser <!nodoc>,
+ python3-nbsphinx <!nodoc>,
+ python3-psutil,
+ python3-pydata-sphinx-theme <!nodoc>,
+ python3-pytest <!nocheck>,
+ python3-pytest-asyncio <!nocheck>,
+ python3-pytest-tornado <!nocheck>,
+ python3-sphinx <!nodoc>,
+ python3-sphinx-copybutton <!nodoc>,
+ python3-sphinxext-rediraffe <!nodoc>,
+ python3-testpath <!nocheck>,
+ python3-tornado,
  python3-tqdm,
- python3-sphinx <!nodoc>, python3-doc <!nodoc>, python-ipython-doc <!nodoc>,
- python-distributed-doc <!nodoc>, python-jupyter-client-doc <!nodoc>,
- python-pymongo-doc <!nodoc>, python3-nbsphinx <!nodoc>,
- python3-sphinx-copybutton <!nodoc>, pandoc <!nodoc>, python3-matplotlib <!nodoc>,
- python3-pytest <!nocheck>, python3-pytest-cov <!nocheck>,
- python3-testpath <!nocheck>, python3-mock <!nocheck>,
- python3-pytest-asyncio <!nocheck>, python3-pytest-tornado <!nocheck>
-Standards-Version: 4.6.0
+ python3-traitlets,
+ python3-zmq
+Standards-Version: 4.7.0
 Homepage: https://github.com/ipython/ipyparallel
 Vcs-Git: https://salsa.debian.org/python-team/packages/ipyparallel.git
 Vcs-Browser: https://salsa.debian.org/python-team/packages/ipyparallel
@@ -25,8 +48,11 @@ Testsuite: autopkgtest-pkg-python
 
 Package: python3-ipyparallel
 Architecture: all
-Depends: ${python3:Depends}, ${misc:Depends}
-Suggests: python-ipyparallel-doc
+Depends:
+ ${misc:Depends},
+ ${python3:Depends}
+Suggests:
+ python-ipyparallel-doc
 Description: Interactive Parallel Computing with IPython (library & scripts)
  ipyparallel is a Python package and collection of CLI scripts
  for controlling clusters for Jupyter. ipyparallel is the new home
@@ -45,10 +71,14 @@ Build-Profiles: <!nodoc>
 Architecture: all
 Multi-Arch: foreign
 Section: doc
-Depends: ${sphinxdoc:Depends}, ${misc:Depends}
-Suggests: python3-doc <!nodoc>, python-ipython-doc <!nodoc>,
- python-distributed-doc <!nodoc>, python-jupyter-client-doc <!nodoc>,
- python-pymongo-doc <!nodoc>
+Depends:
+ ${misc:Depends},
+ ${sphinxdoc:Depends}
+Suggests:
+ python-ipython-doc <!nodoc>,
+ python-jupyter-client-doc <!nodoc>,
+ python-pymongo-doc <!nodoc>,
+ python3-doc <!nodoc>
 Description: Interactive Parallel Computing with IPython (documentation)
  ipyparallel is a Python package and collection of CLI scripts
  for controlling clusters for Jupyter. ipyparallel is the new home

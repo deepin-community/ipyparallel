@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-# encoding: utf-8
 """
 The IPython engine application
 """
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 import json
@@ -11,8 +11,7 @@ import signal
 import sys
 import time
 from getpass import getpass
-from io import FileIO
-from io import TextIOWrapper
+from io import FileIO, TextIOWrapper
 from logging import StreamHandler
 
 import zmq
@@ -20,35 +19,38 @@ from ipykernel.kernelapp import IPKernelApp
 from ipykernel.zmqshell import ZMQInteractiveShell
 from IPython.core.profiledir import ProfileDir
 from jupyter_client.localinterfaces import localhost
-from jupyter_client.session import Session
-from jupyter_client.session import session_aliases
-from jupyter_client.session import session_flags
+from jupyter_client.session import Session, session_aliases, session_flags
 from tornado import ioloop
-from traitlets import Bool
-from traitlets import Bytes
-from traitlets import default
-from traitlets import Dict
-from traitlets import Float
-from traitlets import Instance
-from traitlets import Integer
-from traitlets import List
-from traitlets import observe
-from traitlets import Type
-from traitlets import Unicode
-from traitlets import validate
+from traitlets import (
+    Bool,
+    Bytes,
+    Dict,
+    Float,
+    Instance,
+    Integer,
+    List,
+    Type,
+    Unicode,
+    default,
+    observe,
+    validate,
+)
 from traitlets.config import Config
 from zmq.eventloop import zmqstream
+
+from ipyparallel import util
+from ipyparallel.apps.baseapp import (
+    BaseParallelApplication,
+    base_aliases,
+    base_flags,
+    catch_config_error,
+)
+from ipyparallel.controller.heartmonitor import Heart
+from ipyparallel.util import disambiguate_ip_address, disambiguate_url
 
 from .kernel import IPythonParallelKernel as Kernel
 from .log import EnginePUBHandler
 from .nanny import start_nanny
-from ipyparallel.apps.baseapp import base_aliases
-from ipyparallel.apps.baseapp import base_flags
-from ipyparallel.apps.baseapp import BaseParallelApplication
-from ipyparallel.apps.baseapp import catch_config_error
-from ipyparallel.controller.heartmonitor import Heart
-from ipyparallel.util import disambiguate_ip_address
-from ipyparallel.util import disambiguate_url
 
 # -----------------------------------------------------------------------------
 # Module level variables
@@ -103,7 +105,6 @@ flags.update(session_flags)
 
 
 class IPEngine(BaseParallelApplication):
-
     name = 'ipengine'
     description = _description
     examples = _examples
@@ -124,14 +125,14 @@ class IPEngine(BaseParallelApplication):
     )
 
     startup_script = Unicode(
-        u'', config=True, help='specify a script to be run at startup'
+        '', config=True, help='specify a script to be run at startup'
     )
     startup_command = Unicode(
         '', config=True, help='specify a command to be run at startup'
     )
 
     url_file = Unicode(
-        u'',
+        '',
         config=True,
         help="""The full location of the file containing the connection information for
         the controller. If this is not given, the file must be in the
@@ -147,7 +148,13 @@ class IPEngine(BaseParallelApplication):
         may take a moment for the controller to write the connector files.""",
     )
 
-    url_file_name = Unicode(u'ipcontroller-engine.json', config=True)
+    url_file_name = Unicode('ipcontroller-engine.json', config=True)
+
+    connection_info_env = Unicode()
+
+    @default("connection_info_env")
+    def _default_connection_file_env(self):
+        return os.environ.get("IPP_CONNECTION_INFO", "")
 
     @observe('cluster_id')
     def _cluster_id_changed(self, change):
@@ -342,28 +349,33 @@ class IPEngine(BaseParallelApplication):
             self.log.info("Generating new CURVE credentials")
             self.curve_publickey, self.curve_secretkey = zmq.curve_keypair()
 
-    def find_url_file(self):
+    def find_connection_file(self):
         """Set the url file.
 
         Here we don't try to actually see if it exists for is valid as that
         is handled by the connection logic.
         """
-        # Find the actual controller key file
+        # Find the actual ipcontroller-engine.json connection file
         if not self.url_file:
             self.url_file = os.path.join(
                 self.profile_dir.security_dir, self.url_file_name
             )
 
-    def load_connector_file(self):
+    def load_connection_file(self):
         """load config from a JSON connector file,
         at a *lower* priority than command-line/config files.
-        """
 
-        self.log.info("Loading connection file %r", self.url_file)
+        Same content can be specified in $IPP_CONNECTION_INFO env
+        """
         config = self.config
 
-        with open(self.url_file) as f:
-            d = json.load(f)
+        if self.connection_info_env:
+            self.log.info("Loading connection info from $IPP_CONNECTION_INFO")
+            d = json.loads(self.connection_info_env)
+        else:
+            self.log.info("Loading connection file %r", self.url_file)
+            with open(self.url_file) as f:
+                d = json.load(f)
 
         # allow hand-override of location for disambiguation
         # and ssh-server
@@ -374,7 +386,7 @@ class IPEngine(BaseParallelApplication):
 
         proto, ip = d['interface'].split('://')
         ip = disambiguate_ip_address(ip, self.location)
-        d['interface'] = '%s://%s' % (proto, ip)
+        d['interface'] = f'{proto}://{ip}'
 
         if d.get('curve_serverkey'):
             # connection file takes precedence over env, if present and defined
@@ -395,6 +407,7 @@ class IPEngine(BaseParallelApplication):
 
         config.Session.packer = d['pack']
         config.Session.unpacker = d['unpack']
+        util._disable_session_extract_dates()
         self.session = Session(parent=self)
 
         self.log.debug("Config changed:")
@@ -640,11 +653,11 @@ class IPEngine(BaseParallelApplication):
             # Redirect input streams and set a display hook.
             if self.out_stream_factory:
                 sys.stdout = self.out_stream_factory(
-                    self.session, iopub_socket, u'stdout'
+                    self.session, iopub_socket, 'stdout'
                 )
                 sys.stdout.topic = f"engine.{self.id}.stdout".encode("ascii")
                 sys.stderr = self.out_stream_factory(
-                    self.session, iopub_socket, u'stderr'
+                    self.session, iopub_socket, 'stderr'
                 )
                 sys.stderr.topic = f"engine.{self.id}.stderr".encode("ascii")
 
@@ -852,26 +865,27 @@ class IPEngine(BaseParallelApplication):
         # This is the working dir by now.
         sys.path.insert(0, '')
         config = self.config
-        # print config
-        self.find_url_file()
 
-        if self.wait_for_url_file and not os.path.exists(self.url_file):
-            self.log.warning("url_file %r not found", self.url_file)
-            self.log.warning(
-                "Waiting up to %.1f seconds for it to arrive.", self.wait_for_url_file
-            )
-            tic = time.time()
-            while not os.path.exists(self.url_file) and (
-                time.time() - tic < self.wait_for_url_file
-            ):
-                # wait for url_file to exist, or until time limit
-                time.sleep(0.1)
+        if not self.connection_info_env:
+            self.find_connection_file()
+            if self.wait_for_url_file and not os.path.exists(self.url_file):
+                self.log.warning(f"Connection file {self.url_file!r} not found")
+                self.log.warning(
+                    "Waiting up to %.1f seconds for it to arrive.",
+                    self.wait_for_url_file,
+                )
+                tic = time.monotonic()
+                while not os.path.exists(self.url_file) and (
+                    time.monotonic() - tic < self.wait_for_url_file
+                ):
+                    # wait for url_file to exist, or until time limit
+                    time.sleep(0.1)
 
-        if os.path.exists(self.url_file):
-            self.load_connector_file()
-        else:
-            self.log.fatal("Fatal: url file never arrived: %s", self.url_file)
-            self.exit(1)
+            if not os.path.exists(self.url_file):
+                self.log.fatal(f"Fatal: connection file never arrived: {self.url_file}")
+                self.exit(1)
+
+        self.load_connection_file()
 
         exec_lines = []
         for app in ('IPKernelApp', 'InteractiveShellApp'):
@@ -903,19 +917,10 @@ class IPEngine(BaseParallelApplication):
             handler.setLevel(self.log_level)
             self.log.addHandler(handler)
 
-    @default("log_level")
-    def _default_debug(self):
-        return 10
-
     @catch_config_error
     def initialize(self, argv=None):
-        self.log_level = 10
         super().initialize(argv)
-        self.log_level = 10
-        self.log.info(f"log level {self.log_level}")
-        self.log.debug("init")
         self.init_engine()
-        self.log.debug("init engine")
         self.forward_logging()
 
     def init_signal(self):

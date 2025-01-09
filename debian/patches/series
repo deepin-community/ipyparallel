@@ -3,3 +3,4 @@ use_etc_without_usr.patch
 use-local-intershpinx-inventory-files.patch
 mark_async_test_xfail.patch
 fix_docs
+0006-Define-asyncio_default_fixture_loop_scope-for-pytest.patch

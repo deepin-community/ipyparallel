@@ -1,37 +1,30 @@
 """Views of remote engines."""
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 import builtins
 import concurrent.futures
 import inspect
+import secrets
+import threading
+import time
 import warnings
 from collections import deque
 from contextlib import contextmanager
 
 from decorator import decorator
 from IPython import get_ipython
-from traitlets import Any
-from traitlets import Bool
-from traitlets import CFloat
-from traitlets import Dict
-from traitlets import HasTraits
-from traitlets import Instance
-from traitlets import Integer
-from traitlets import List
-from traitlets import Set
+from traitlets import Any, Bool, CFloat, Dict, HasTraits, Instance, Integer, List, Set
 
-from . import map as Map
+import ipyparallel as ipp
+from ipyparallel import util
+from ipyparallel.controller.dependency import Dependency, dependent
+
 from .. import serialize
 from ..serialize import PrePickled
-from .asyncresult import AsyncMapResult
-from .asyncresult import AsyncResult
-from .remotefunction import getname
-from .remotefunction import parallel
-from .remotefunction import ParallelFunction
-from .remotefunction import remote
-from ipyparallel import util
-from ipyparallel.controller.dependency import Dependency
-from ipyparallel.controller.dependency import dependent
+from . import map as Map
+from .asyncresult import AsyncMapResult, AsyncResult
+from .remotefunction import ParallelFunction, getname, parallel, remote
 
 # -----------------------------------------------------------------------------
 # Decorators
@@ -118,20 +111,20 @@ class View(HasTraits):
     _idents = Any()
 
     def __init__(self, client=None, socket=None, **flags):
-        super(View, self).__init__(client=client, _socket=socket)
+        super().__init__(client=client, _socket=socket)
         self.results = client.results
         self.block = client.block
         self.executor = ViewExecutor(self)
 
         self.set_flags(**flags)
 
-        assert not self.__class__ is View, "Don't use base View objects, use subclasses"
+        assert self.__class__ is not View, "Don't use base View objects, use subclasses"
 
     def __repr__(self):
         strtargets = str(self.targets)
         if len(strtargets) > 16:
             strtargets = strtargets[:12] + '...]'
-        return "<%s %s>" % (self.__class__.__name__, strtargets)
+        return f"<{self.__class__.__name__} {strtargets}>"
 
     def __len__(self):
         if isinstance(self.targets, list):
@@ -397,8 +390,8 @@ class DirectView(View):
 
     """
 
-    def __init__(self, client=None, socket=None, targets=None):
-        super(DirectView, self).__init__(client=client, socket=socket, targets=targets)
+    def __init__(self, client=None, socket=None, targets=None, **flags):
+        super().__init__(client=client, socket=socket, targets=targets, **flags)
 
     @property
     def importer(self):
@@ -477,8 +470,9 @@ class DirectView(View):
                 if not quiet:
                     if fromlist:
                         print(
-                            "importing %s from %s on engine(s)"
-                            % (','.join(fromlist), name)
+                            "importing {} from {} on engine(s)".format(
+                                ','.join(fromlist), name
+                            )
                         )
                     else:
                         print("importing %s on engine(s)" % name)
@@ -698,7 +692,7 @@ class DirectView(View):
             default: self.block
 
         """
-        with open(filename, 'r') as f:
+        with open(filename) as f:
             # add newline in case of trailing indented whitespace
             # which will cause SyntaxError
             code = f.read() + '\n'
@@ -775,7 +769,7 @@ class DirectView(View):
         mapObject = Map.dists[dist]()
         nparts = len(targets)
         futures = []
-        trackers = []
+        _lengths = []
         for index, engineid in enumerate(targets):
             partition = mapObject.getPartition(seq, index, nparts)
             if flatten and len(partition) == 1:
@@ -785,10 +779,12 @@ class DirectView(View):
             r = self.push(ns, block=False, track=track, targets=engineid)
             r.owner = False
             futures.extend(r._children)
+            _lengths.append(len(partition))
 
         r = AsyncResult(
             self.client, futures, fname='scatter', targets=targets, owner=True
         )
+        r._scatter_lengths = _lengths
         if block:
             r.wait()
         else:
@@ -897,7 +893,10 @@ class BroadcastView(DirectView):
             for ident in s_idents:
                 msg_and_target_id = f'{original_msg_id}_{ident}'
                 future = self.client.create_message_futures(
-                    msg_and_target_id, async_result=True, track=True
+                    msg_and_target_id,
+                    message_future.header,
+                    async_result=True,
+                    track=True,
                 )
                 self.client.outstanding.add(msg_and_target_id)
                 self.client._outstanding_dict[ident].add(msg_and_target_id)
@@ -935,7 +934,6 @@ class BroadcastView(DirectView):
         track = self.track if track is None else track
         targets = self.targets if targets is None else targets
         idents, _targets = self.client._build_targets(targets)
-        futures = []
 
         pf = PrePickled(f)
         pargs = [PrePickled(arg) for arg in args]
@@ -1019,12 +1017,144 @@ class BroadcastView(DirectView):
                 pass
         return ar
 
-    def map(self, f, *sequences, **kwargs):
-        raise NotImplementedError("BroadcastView.map not yet implemented")
+    @staticmethod
+    def _broadcast_map(f, *sequence_names):
+        """Function passed to apply
+
+        Equivalent, but account for the fact that scatter
+        occurs in a separate step.
+
+        Does these things:
+        - resolve sequence names to sequences in the user namespace
+        - collect list(map(f, *squences))
+        - cleanup temporary sequence variables from scatter
+        """
+        sequences = []
+        ip = get_ipython()
+        for seq_name in sequence_names:
+            sequences.append(ip.user_ns.pop(seq_name))
+        return list(map(f, *sequences))
+
+    @_not_coalescing
+    def map(self, f, *sequences, block=None, track=False, return_exceptions=False):
+        """Parallel version of builtin `map`, using this View's `targets`.
+
+        There will be one task per engine, so work will be chunked
+        if the sequences are longer than `targets`.
+
+        Results can be iterated as they are ready, but will become available in chunks.
+
+        .. note::
+
+            BroadcastView does not yet have a fully native map implementation.
+            In particular, the scatter step is still one message per engine,
+            identical to DirectView,
+            and typically slower due to the more complex scheduler.
+
+            It is more efficient to partition inputs via other means (e.g. SPMD based on rank & size)
+            and use `apply` to submit all tasks in one broadcast.
+
+        .. versionadded:: 8.8
+
+        Parameters
+        ----------
+        f : callable
+            function to be mapped
+        *sequences : one or more sequences of matching length
+            the sequences to be distributed and passed to `f`
+        block : bool [default self.block]
+            whether to wait for the result or not
+        track : bool [default False]
+            Track underlying zmq send to indicate when it is safe to modify memory.
+            Only for zero-copy sends such as numpy arrays that are going to be modified in-place.
+        return_exceptions : bool [default False]
+            Return remote Exceptions in the result sequence instead of raising them.
+
+        Returns
+        -------
+        If block=False
+            An :class:`~ipyparallel.client.asyncresult.AsyncMapResult` instance.
+            An object like AsyncResult, but which reassembles the sequence of results
+            into a single list. AsyncMapResults can be iterated through before all
+            results are complete.
+        else
+            A list, the result of ``map(f,*sequences)``
+        """
+        if block is None:
+            block = self.block
+        if track is None:
+            track = self.track
+
+        # unique identifier, since we're living in the interactive namespace
+        map_key = secrets.token_hex(5)
+        dist = 'b'
+        map_object = Map.dists[dist]()
+
+        seq_names = []
+        for i, seq in enumerate(sequences):
+            seq_name = f"_seq_{map_key}_{i}"
+            seq_names.append(seq_name)
+            try:
+                len(seq)
+            except Exception:
+                # cast length-less sequences (e.g. Range) to list
+                seq = list(seq)
+
+            ar = self.scatter(seq_name, seq, dist=dist, block=False, track=track)
+            scatter_chunk_sizes = ar._scatter_lengths
+
+        # submit the map tasks as an actual broadcast
+        ar = self.apply(self._broadcast_map, f, *seq_names)
+        ar.owner = False
+        # re-wrap messages in an AsyncMapResult to get map API
+        # this is where the 'gather' reconstruction happens
+        amr = ipp.AsyncMapResult(
+            self.client,
+            ar._children,
+            map_object,
+            fname=getname(f),
+            return_exceptions=return_exceptions,
+            chunk_sizes={
+                future.msg_id: chunk_size
+                for future, chunk_size in zip(ar._children, scatter_chunk_sizes)
+            },
+        )
+
+        if block:
+            return amr.get()
+        else:
+            return amr
 
     # scatter/gather cannot be coalescing yet
     scatter = _not_coalescing(DirectView.scatter)
     gather = _not_coalescing(DirectView.gather)
+
+
+class LazyMapIterator:
+    """Iterable representation of a lazy map (imap)
+
+    Has a `.cancel()` method to stop consuming new inputs.
+
+    .. versionadded:: 8.0
+    """
+
+    def __init__(self, gen, signal_done):
+        self._gen = gen
+        self._signal_done = signal_done
+
+    def __iter__(self):
+        return self._gen
+
+    def __next__(self):
+        return next(self._gen)
+
+    def cancel(self):
+        """Stop consuming the input to the map.
+
+        Useful to e.g. stop consuming an infinite (or just large) input
+        when you've arrived at the result (or error) you needed.
+        """
+        self._signal_done()
 
 
 class LoadBalancedView(View):
@@ -1051,9 +1181,10 @@ class LoadBalancedView(View):
     _flag_names = List(
         ['targets', 'block', 'track', 'follow', 'after', 'timeout', 'retries']
     )
+    _outstanding_maps = Set()
 
     def __init__(self, client=None, socket=None, **flags):
-        super(LoadBalancedView, self).__init__(client=client, socket=socket, **flags)
+        super().__init__(client=client, socket=socket, **flags)
         self._task_scheme = client._task_scheme
 
     def _validate_dependency(self, dep):
@@ -1126,7 +1257,7 @@ class LoadBalancedView(View):
             Number of times a task will be retried on failure.
         """
 
-        super(LoadBalancedView, self).set_flags(**kwargs)
+        super().set_flags(**kwargs)
         for name in ('follow', 'after'):
             if name in kwargs:
                 value = kwargs[name]
@@ -1377,80 +1508,140 @@ class LoadBalancedView(View):
 
         pf = PrePickled(f)
 
+        map_id = secrets.token_bytes(16)
+
+        # record that a map is outstanding, mainly for Executor.shutdown
+        self._outstanding_maps.add(map_id)
+
+        def signal_done():
+            nonlocal iterator_done
+            iterator_done = True
+            self._outstanding_maps.discard(map_id)
+
+        outstanding_lock = threading.Lock()
+
         if ordered:
             outstanding = deque()
-
-            def wait_for_ready():
-                ar = outstanding.popleft()
-                return [ar]
-
-            def should_yield():
-                # ordered: yield first result if it's ready
-                if outstanding[0].ready():
-                    return True
-
-                if max_outstanding == 0:
-                    # no limit
-                    return False
-
-                # or if we've reached capacity (only counting still-outstanding computations)
-                # not counting locally available, but not yet yielded results
-                # TODO: should we limit the local?
-                # if consumers are much slower than producers,
-                # this can fill up local memory
-                return sum(not ar.ready() for ar in outstanding) >= max_outstanding
-
+            add_outstanding = outstanding.append
         else:
-            outstanding = []
+            outstanding = set()
+            add_outstanding = outstanding.add
 
-            def wait_for_ready():
+        def wait_for_ready():
+            while not outstanding and not iterator_done:
+                # no outstanding futures, need to wait for something to wait for
+                time.sleep(0.1)
+            if not outstanding:
+                # nothing to wait for, iterator_done is True
+                return []
+
+            if ordered:
+                with outstanding_lock:
+                    return [outstanding.popleft()]
+            else:
                 # unordered, yield whatever finishes first, as soon as it's ready
-                done, outstanding[:] = concurrent.futures.wait(
-                    outstanding, return_when=concurrent.futures.FIRST_COMPLETED
+                # repeat with timeout because the consumer thread may be adding to `outstanding`
+                with outstanding_lock:
+                    to_wait = outstanding.copy()
+                done, _ = concurrent.futures.wait(
+                    to_wait,
+                    return_when=concurrent.futures.FIRST_COMPLETED,
+                    timeout=0.5,
                 )
+                if done:
+                    with outstanding_lock:
+                        for f in done:
+                            outstanding.remove(f)
                 return done
 
-            def should_yield():
-                # unordered, we are ready to yield if any result is ready
-                if any(ar.ready() for ar in outstanding):
-                    return True
+        arg_iterator = iter(zip(*sequences))
+        iterator_done = False
 
-                if max_outstanding == 0:
-                    # no limit
-                    return False
+        # consume inputs in _another_ thread,
+        # to avoid blocking the IO thread with a possibly blocking generator
+        # only need one thread for this, though.
+        consumer_pool = concurrent.futures.ThreadPoolExecutor(1)
 
-                # or wait if we are full
-                if len(outstanding) >= max_outstanding:
-                    return True
-                return False
+        def consume_callback(f):
+            if not iterator_done:
+                consumer_pool.submit(consume_next)
 
-        # zip is a lazy iterator
-        for args in zip(*sequences):
-            # submit one work item
-            ar = self.apply_async(pf, *args)
-            outstanding.append(ar)
-            # count 'pending' tasks
-            # yield first result if it's ready
-            # *or* the number of outstanding tasks has reached our limit
-            # yielding immediately means
-            if should_yield():
-                for ready_ar in wait_for_ready():
-                    yield ready_ar.get(return_exceptions=return_exceptions)
+        def consume_next():
+            """Consume the next call from the argument iterator
 
-            # we've filled the buffer, wait for at least one result before continuing
-            if len(outstanding) == max_outstanding:
-                for ready_ar in wait_for_ready():
-                    yield ready_ar.get(return_exceptions=return_exceptions)
+            If max_outstanding, schedules consumption when the result finishes.
+            If running with no limit, schedules another consumption immediately.
+            """
+            nonlocal iterator_done
+            if iterator_done:
+                return
 
-        # yield any remaining results
-        if ordered:
-            for ar in outstanding:
-                yield ar.get(return_exceptions=return_exceptions)
-        else:
-            while outstanding:
-                done, outstanding = concurrent.futures.wait(outstanding)
-                for ar in done:
+            try:
+                args = next(arg_iterator)
+                ar = self.apply_async(pf, *args)
+            except StopIteration:
+                signal_done()
+                return
+            except Exception as e:
+                # exception consuming iterator, propagate
+                ar = concurrent.futures.Future()
+                # mock get so it gets re-raised when awaited
+                ar.get = lambda *args: ar.result()
+                ar.set_exception(e)
+                with outstanding_lock:
+                    add_outstanding(ar)
+                signal_done()
+                return
+
+            with outstanding_lock:
+                add_outstanding(ar)
+            if max_outstanding:
+                ar.add_done_callback(consume_callback)
+            else:
+                consumer_pool.submit(consume_next)
+
+        # kick it off
+        # only need one if not using max_outstanding,
+        # as each eventloop tick will submit a new item
+        # otherwise, start one consumer for each slot, which will chain
+        kickoff_count = 1 if max_outstanding == 0 else max_outstanding
+        submit_futures = []
+        for i in range(kickoff_count):
+            submit_futures.append(consumer_pool.submit(consume_next))
+
+        # await the first one, just in case it raises
+        try:
+            submit_futures[0].result()
+        except Exception:
+            # make sure we clean up
+            signal_done()
+            raise
+        del submit_futures
+
+        # wrap result-yielding in another call
+        # because if this function is itself a generator
+        # the first submission won't happen until the first result is requested
+        def iter_results():
+            nonlocal outstanding
+            with consumer_pool:
+                while not iterator_done:
+                    # yield results as they become ready
+                    for ready_ar in wait_for_ready():
+                        yield ready_ar.get(return_exceptions=return_exceptions)
+
+            # yield any remaining results
+            if ordered:
+                for ar in outstanding:
                     yield ar.get(return_exceptions=return_exceptions)
+            else:
+                while outstanding:
+                    done, outstanding = concurrent.futures.wait(
+                        outstanding, return_when=concurrent.futures.FIRST_COMPLETED
+                    )
+                    for ar in done:
+                        yield ar.get(return_exceptions=return_exceptions)
+
+        return LazyMapIterator(iter_results(), signal_done)
 
     def register_joblib_backend(self, name='ipyparallel', make_default=False):
         """Register this View as a joblib parallel backend
@@ -1469,6 +1660,7 @@ class LoadBalancedView(View):
         .. versionadded:: 5.1
         """
         from joblib.parallel import register_parallel_backend
+
         from ._joblib import IPythonParallelBackend
 
         register_parallel_backend(
@@ -1497,8 +1689,7 @@ class ViewExecutor(concurrent.futures.Executor):
         if 'timeout' in kwargs:
             warnings.warn("timeout unsupported in ViewExecutor.map")
             kwargs.pop('timeout')
-        for r in self.view.imap(func, *iterables, **kwargs):
-            yield r
+        return self.view.imap(func, *iterables, **kwargs)
 
     def shutdown(self, wait=True):
         """ViewExecutor does *not* shutdown engines
@@ -1506,6 +1697,12 @@ class ViewExecutor(concurrent.futures.Executor):
         results are awaited if wait=True, but engines are *not* shutdown.
         """
         if wait:
+            # wait for *submission* of outstanding maps,
+            # otherwise view.wait won't know what to wait for
+            outstanding_maps = getattr(self.view, "_outstanding_maps")
+            if outstanding_maps:
+                while outstanding_maps:
+                    time.sleep(0.1)
             self.view.wait()
 
 

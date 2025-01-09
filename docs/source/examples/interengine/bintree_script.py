@@ -4,22 +4,20 @@ Script for setting up and using [all]reduce with a binary-tree engine interconne
 
 usage: `python bintree_script.py`
 
-This spanning tree strategy ensures that a single node node mailbox will never 
-receive more that 2 messages at once. This is very important to scale to large 
-clusters (e.g. 1000 nodes) since if you have many incoming messages of a couple 
-of megabytes you might saturate the network interface of a single node and 
-potentially its memory buffers if the messages are not consumed in a streamed 
+This spanning tree strategy ensures that a single node node mailbox will never
+receive more that 2 messages at once. This is very important to scale to large
+clusters (e.g. 1000 nodes) since if you have many incoming messages of a couple
+of megabytes you might saturate the network interface of a single node and
+potentially its memory buffers if the messages are not consumed in a streamed
 manner.
 
-Note that the AllReduce scheme implemented with the spanning tree strategy 
-impose the aggregation function to be commutative and distributive. It might 
-not be the case if you implement the naive gather / reduce / broadcast strategy 
+Note that the AllReduce scheme implemented with the spanning tree strategy
+impose the aggregation function to be commutative and distributive. It might
+not be the case if you implement the naive gather / reduce / broadcast strategy
 where you can reorder the partial data before performing the reduce.
 """
-from __future__ import print_function
 
 import ipyparallel as ipp
-
 
 # connect client and create views
 rc = ipp.Client()
@@ -52,6 +50,7 @@ ar = view.apply_async(lambda: com.info)  # noqa: F821
 peers = ar.get_dict()
 # this is a dict, keyed by engine ID, of the connection info for the EngineCommunicators
 
+
 # connect the engines to each other:
 def connect(com, peers, tree, pub_url, root_id):
     """this function will be called on the engines"""
@@ -59,6 +58,7 @@ def connect(com, peers, tree, pub_url, root_id):
 
 
 view.apply_sync(connect, ipp.Reference('com'), peers, btree, pub_url, root_id)
+
 
 # functions that can be used for reductions
 # max and min builtins can be used as well

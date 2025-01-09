@@ -10,6 +10,7 @@ and some engines using something like::
 
     ipcluster start -n 4
 """
+
 import sys
 import time
 
@@ -19,9 +20,10 @@ import ipyparallel as ipp
 
 
 def fetchAndParse(url, data=None):
-    import requests
     from urllib.parse import urljoin
+
     import bs4  # noqa
+    import requests
 
     links = []
     r = requests.get(url, data=data)
@@ -36,7 +38,6 @@ def fetchAndParse(url, data=None):
 
 
 class DistributedSpider:
-
     # Time to wait between polling for task results.
     pollingDelay = 0.5
 
@@ -83,7 +84,7 @@ class DistributedSpider:
             except Exception as e:
                 self.linksDone[url] = None
                 del self.linksWorking[url]
-                print('%s: %s' % (url, e))
+                print(f'{url}: {e}')
             else:
                 self.onVisitDone(links, url)
 

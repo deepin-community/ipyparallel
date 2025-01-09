@@ -10,12 +10,10 @@ Authors
  * Min Ragan-Kelley
 
 """
+
 import time
 
-from numpy import arange
-from numpy import newaxis
-from numpy import sqrt
-from numpy import zeros
+from numpy import arange, newaxis, sqrt, zeros
 
 
 def iseq(start=0, stop=None, inc=1):
@@ -92,7 +90,6 @@ class WaveSolver:
             'bc': 'vectorized',
         },
     ):
-
         nx = partitioner.global_num_cells[0]  # number of global cells in x dir
         ny = partitioner.global_num_cells[1]  # number of global cells in y dir
         dx = Lx / float(nx)
@@ -111,10 +108,10 @@ class WaveSolver:
         xv = x[:, newaxis]  # for vectorized expressions with f(xv,yv)
         yv = y[newaxis, :]  # -- " --
         if dt <= 0:
-            dt = (1 / float(c)) * (1 / sqrt(1 / dx ** 2 + 1 / dy ** 2))  # max time step
+            dt = (1 / float(c)) * (1 / sqrt(1 / dx**2 + 1 / dy**2))  # max time step
         Cx2 = (c * dt / dx) ** 2
         Cy2 = (c * dt / dy) ** 2
-        dt2 = dt ** 2  # help variables
+        dt2 = dt**2  # help variables
 
         u = zeros((nx + 1, ny + 1))  # solution array
         u_1 = u.copy()  # solution at t-dt
@@ -216,10 +213,10 @@ class WaveSolver:
         xv = x[:, newaxis]  # for vectorized expressions with f(xv,yv)
         yv = y[newaxis, :]  # -- " --
         if dt <= 0:
-            dt = (1 / float(c)) * (1 / sqrt(1 / dx ** 2 + 1 / dy ** 2))  # max time step
+            dt = (1 / float(c)) * (1 / sqrt(1 / dx**2 + 1 / dy**2))  # max time step
         Cx2 = (c * dt / dx) ** 2
         Cy2 = (c * dt / dy) ** 2
-        dt2 = dt ** 2  # help variables
+        dt2 = dt**2  # help variables
         # id for the four possible neighbor subdomains
         lower_x_neigh = partitioner.lower_neighbors[0]
         upper_x_neigh = partitioner.upper_neighbors[0]
@@ -233,7 +230,9 @@ class WaveSolver:
             t_old = t
             t += dt
             if verbose:
-                print('solving (%s version) at t=%g' % (implementation['inner'], t))
+                print(
+                    'solving ({} version) at t={:g}'.format(implementation['inner'], t)
+                )
             # update all inner points:
             if implementation['inner'] == 'scalar':
                 for i in range(1, nx):
