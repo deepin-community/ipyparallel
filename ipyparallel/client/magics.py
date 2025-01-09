@@ -1,4 +1,3 @@
-# encoding: utf-8
 """
 =============
 parallelmagic
@@ -26,29 +25,21 @@ Usage
 {CONFIG_DOC}
 
 """
-import time
-from contextlib import contextmanager
-
-# Python 3.6 doesn't have nullcontext, so we define our own
-@contextmanager
-def nullcontext():
-    yield
-
-
-# -----------------------------------------------------------------------------
-#  Copyright (C) 2008 The IPython Development Team
-#
-#  Distributed under the terms of the BSD License.  The full license is in
-#  the file COPYING, distributed as part of this software.
-# -----------------------------------------------------------------------------
 
 import inspect
 import re
+import sys
+import time
+from contextlib import nullcontext
 from textwrap import dedent
 
-from IPython.core.error import UsageError
-from IPython.core.magic import Magics
 from IPython.core import magic_arguments
+from IPython.core.error import UsageError
+from IPython.core.magic import Magics, no_var_expand
+
+import ipyparallel as ipp
+
+from .. import error
 
 # -----------------------------------------------------------------------------
 # Definitions of magic functions for use with IPython
@@ -156,6 +147,16 @@ def exec_args(f):
             Use -1 for no progress, 0 for always showing progress immediately.
             """,
         ),
+        magic_arguments.argument(
+            '--signal-on-interrupt',
+            dest='signal_on_interrupt',
+            type=str,
+            default=None,
+            help="""Send signal to engines on Keyboard Interrupt. By default a SIGINT is sent.
+            Note that this is only applicable when running in blocking mode.
+            Choices: SIGINT, 2, SIGKILL, 9, 0 (nop), etc.
+            """,
+        ),
     ]
     for a in args:
         f = a(f)
@@ -232,9 +233,11 @@ class ParallelMagics(Magics):
     # verbose flag
     verbose = False
     # streaming output flag
-    stream_ouput = True
+    stream_output = not ipp._NONINTERACTIVE
     # seconds to wait before showing progress bar for blocking execution
     progress_after_seconds = 2
+    # signal to send to engines on keyboard-interrupt
+    signal_on_interrupt = "SIGINT"
 
     def __init__(self, shell, view, suffix=''):
         self.view = view
@@ -256,7 +259,7 @@ class ParallelMagics(Magics):
 
         self.magics['cell'][px] = self.cell_px
 
-        super(ParallelMagics, self).__init__(shell=shell)
+        super().__init__(shell=shell)
 
     def _eval_target_str(self, ts):
         if ':' in ts:
@@ -266,6 +269,11 @@ class ParallelMagics(Magics):
         else:
             targets = eval(ts)
         return targets
+
+    def _eval_signal_str(self, sig_str: str):
+        if sig_str.isdigit():
+            return int(sig_str)
+        return sig_str
 
     @magic_arguments.magic_arguments()
     @exec_args
@@ -279,7 +287,9 @@ class ParallelMagics(Magics):
         if args.set_verbose is not None:
             self.verbose = args.set_verbose
         if args.stream is not None:
-            self.stream_ouput = args.stream
+            self.stream_output = args.stream
+        if args.signal_on_interrupt is not None:
+            self.signal_on_interrupt = self._eval_signal_str(args.signal_on_interrupt)
 
         if args.progress_after_seconds is not None:
             self.progress_after_seconds = args.progress_after_seconds
@@ -310,9 +320,14 @@ class ParallelMagics(Magics):
         if self.last_result is None:
             raise UsageError(NO_LAST_RESULT)
 
+        if args.save_name:
+            self.shell.user_ns[args.save_name] = self.last_result
+            return
+
         self.last_result.get()
         self.last_result.display_outputs(groupby=args.groupby)
 
+    @no_var_expand
     def px(self, line=''):
         """Executes the given python command in parallel.
 
@@ -339,12 +354,18 @@ class ParallelMagics(Magics):
         save_name=None,
         stream_output=None,
         progress_after=None,
+        signal_on_interrupt=None,
     ):
         """implementation used by %px and %%parallel"""
 
         # defaults:
         block = self.view.block if block is None else block
-        stream_output = self.stream_ouput if stream_output is None else stream_output
+        stream_output = self.stream_output if stream_output is None else stream_output
+        signal_on_interrupt = (
+            self.signal_on_interrupt
+            if signal_on_interrupt is None
+            else signal_on_interrupt
+        )
 
         base = "Parallel" if block else "Async parallel"
 
@@ -364,35 +385,57 @@ class ParallelMagics(Magics):
             self.shell.user_ns[save_name] = result
 
         if block:
+            try:
+                if progress_after is None:
+                    progress_after = self.progress_after_seconds
 
-            if progress_after is None:
-                progress_after = self.progress_after_seconds
-
-            cm = result.stream_output() if stream_output else nullcontext()
-            with cm:
-                finished_waiting = False
-                if progress_after > 0:
-                    # finite progress-after timeout
-                    # wait for 'quick' results before showing progress
-                    tic = time.perf_counter()
-                    deadline = tic + progress_after
-                    try:
-                        result.wait_for_output(timeout=progress_after)
+                cm = result.stream_output() if stream_output else nullcontext()
+                with cm:
+                    finished_waiting = False
+                    if progress_after > 0:
+                        # finite progress-after timeout
+                        # wait for 'quick' results before showing progress
+                        tic = time.perf_counter()
+                        deadline = tic + progress_after
+                        result.wait(timeout=progress_after)
                         remaining = max(deadline - time.perf_counter(), 0)
-                        result.get(timeout=remaining)
-                    except TimeoutError:
-                        pass
-                    else:
-                        finished_waiting = True
+                        result.wait_for_output(timeout=remaining)
+                        finished_waiting = result.done()
 
-                if not finished_waiting:
-                    if progress_after >= 0:
-                        # not an immediate result, start interactive progress
-                        result.wait_interactive()
-                    result.wait_for_output()
-                    result.get()
-            # Skip stdout/stderr if streaming output
-            result.display_outputs(groupby, result_only=stream_output)
+                    if not finished_waiting:
+                        if progress_after >= 0:
+                            # not an immediate result, start interactive progress
+                            result.wait_interactive()
+                            result.wait_for_output(1)
+
+                    try:
+                        result.get()
+                    except error.CompositeError as e:
+                        if stream_output and result._output_ready:
+                            # already streamed, show an abbreviated result
+                            raise error.AlreadyDisplayedError(e) from None
+                        else:
+                            raise
+                # Skip redisplay if streaming output
+            except KeyboardInterrupt:
+                if signal_on_interrupt is not None:
+                    print(
+                        f"Received Keyboard Interrupt. Sending signal {signal_on_interrupt} to engines...",
+                        file=sys.stderr,
+                    )
+                    self.view.client.send_signal(
+                        signal_on_interrupt, targets=targets, block=True
+                    )
+                else:
+                    raise
+            finally:
+                # always redisplay outputs if not streaming,
+                # on both success and error
+
+                if not stream_output:
+                    # wait for at most 1 second for output to be complete
+                    result.wait_for_output(1)
+                    result.display_outputs(groupby)
         else:
             # return AsyncResult only on non-blocking submission
             return result
@@ -424,6 +467,9 @@ class ParallelMagics(Magics):
         if args.targets:
             save_targets = self.view.targets
             self.view.targets = self._eval_target_str(args.targets)
+        signal_on_interrupt = None
+        if args.signal_on_interrupt:
+            signal_on_interrupt = self._eval_signal_str(args.signal_on_interrupt)
         # if running local, don't block until after local has run
         block = False if args.local else args.block
         try:
@@ -434,6 +480,7 @@ class ParallelMagics(Magics):
                 save_name=args.save_name,
                 stream_output=args.stream,
                 progress_after=args.progress_after_seconds,
+                signal_on_interrupt=signal_on_interrupt,
             )
         finally:
             if args.targets:
@@ -519,19 +566,11 @@ class ParallelMagics(Magics):
             return False
         else:
             try:
-                result = self.view.execute(cell, silent=False, block=False)
-            except:
+                self.parallel_execute(cell)
+            except Exception:
                 self.shell.showtraceback()
                 return True
             else:
-                if self.view.block:
-                    try:
-                        result.get()
-                    except:
-                        self.shell.showtraceback()
-                        return True
-                    else:
-                        result.display_outputs()
                 return False
 
     def pxrun_cell(self, raw_cell, *args, **kwargs):

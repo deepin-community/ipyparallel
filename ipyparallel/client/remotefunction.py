@@ -1,16 +1,14 @@
 """Remote Functions and decorators for Views."""
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
-from __future__ import division
-
-import sys
 import warnings
 from inspect import signature
 
 from decorator import decorator
 
-from . import map as Map
 from ..serialize import PrePickled
+from . import map as Map
 from .asyncresult import AsyncMapResult
 
 # -----------------------------------------------------------------------------
@@ -62,11 +60,11 @@ def getname(f):
     """
     try:
         return f.__name__
-    except:
+    except Exception:
         pass
     try:
         return f.name
-    except:
+    except Exception:
         pass
 
     return str(f)
@@ -127,10 +125,7 @@ class RemoteFunction:
         # of decorated functions
         self.__name__ = getname(f)
         if getattr(f, '__doc__', None):
-            self.__doc__ = '{} wrapping:\n{}'.format(
-                self.__class__.__name__,
-                f.__doc__,
-            )
+            self.__doc__ = f'{self.__class__.__name__} wrapping:\n{f.__doc__}'
         if getattr(f, '__signature__', None):
             self.__signature__ = f.__signature__
         else:
@@ -146,10 +141,10 @@ class RemoteFunction:
             return self.view.apply(self.func, *args, **kwargs)
 
 
-if sys.version_info[0] >= 3:
-    _map = lambda f, *sequences: list(map(f, *sequences))
-else:
-    _map = map
+def _map(f, *sequences):
+    return list(map(f, *sequences))
+
+
 _prepickled_map = None
 
 
@@ -202,7 +197,7 @@ class ParallelFunction(RemoteFunction):
         return_exceptions=False,
         **flags,
     ):
-        super(ParallelFunction, self).__init__(view, f, block=block, **flags)
+        super().__init__(view, f, block=block, **flags)
         self.chunksize = chunksize
         self.ordered = ordered
         self.return_exceptions = return_exceptions
@@ -273,14 +268,21 @@ class ParallelFunction(RemoteFunction):
 
         pf = PrePickled(self.func)
 
+        chunk_sizes = {}
+        chunk_size = 1
+
         for index, t in enumerate(targets):
             args = []
             for seq in sequences:
                 part = self.mapObject.getPartition(seq, index, nparts, maxlen)
                 args.append(part)
 
-            if sum([len(arg) for arg in args]) == 0:
+            if sum(len(arg) for arg in args) == 0:
                 continue
+
+            if _mapping:
+                chunk_size = min(len(arg) for arg in args)
+
             args = [PrePickled(arg) for arg in args]
 
             if _mapping:
@@ -294,6 +296,8 @@ class ParallelFunction(RemoteFunction):
                 ar = view.apply(f, *args)
                 ar.owner = False
 
+            msg_id = ar.msg_ids[0]
+            chunk_sizes[msg_id] = chunk_size
             futures.extend(ar._children)
 
         r = AsyncMapResult(
@@ -303,6 +307,7 @@ class ParallelFunction(RemoteFunction):
             fname=getname(self.func),
             ordered=self.ordered,
             return_exceptions=self.return_exceptions,
+            chunk_sizes=chunk_sizes,
         )
 
         if self.block:

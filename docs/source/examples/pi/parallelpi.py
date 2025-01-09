@@ -15,15 +15,16 @@ ftp://pi.super-computing.org/.2/pi200m/
 and the files used will be downloaded if they are not in the working directory
 of the IPython engines.
 """
-from __future__ import print_function
 
 from timeit import default_timer as clock
 
 from matplotlib import pyplot as plt
-from pidigits import compute_two_digit_freqs
-from pidigits import fetch_pi_file
-from pidigits import plot_two_digit_freqs
-from pidigits import reduce_freqs
+from pidigits import (
+    compute_two_digit_freqs,
+    fetch_pi_file,
+    plot_two_digit_freqs,
+    reduce_freqs,
+)
 
 import ipyparallel as ipp
 

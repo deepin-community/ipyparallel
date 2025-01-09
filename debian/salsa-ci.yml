@@ -4,6 +4,6 @@ include:
   - https://salsa.debian.org/salsa-ci-team/pipeline/raw/master/recipes/debian.yml
 
 variables:
-  RELEASE: 'unstable'
+  RELEASE: 'experimental'
   SALSA_CI_ENABLE_PIPELINE_ON_TAGS: 1
   SALSA_CI_DISABLE_BUILD_PACKAGE_ANY: 1

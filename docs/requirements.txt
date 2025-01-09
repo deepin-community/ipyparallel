@@ -1,7 +1,11 @@
+# pin jinja2 due to broken deprecation used in nbconvert
+autodoc-traits
+jinja2==3.0.*
 matplotlib
+myst-nb
 myst-parser
-nbsphinx
 numpy
 pydata-sphinx-theme
 sphinx
 sphinx-copybutton
+sphinxext-rediraffe

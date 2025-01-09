@@ -1,15 +1,14 @@
 """
 A logger object that consolidates messages incoming from ipcluster processes.
 """
+
 import logging
 
 import zmq
 from jupyter_client.localinterfaces import localhost
-from traitlets import Instance
-from traitlets import List
-from traitlets import Unicode
+from tornado import ioloop
+from traitlets import Instance, List, Unicode
 from traitlets.config.configurable import LoggingConfigurable
-from zmq.eventloop import ioloop
 from zmq.eventloop import zmqstream
 
 
@@ -45,7 +44,7 @@ class LogWatcher(LoggingConfigurable):
         return ioloop.IOLoop.current()
 
     def __init__(self, **kwargs):
-        super(LogWatcher, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         s = self.context.socket(zmq.SUB)
         s.bind(self.url)
         self.stream = zmqstream.ZMQStream(s, self.loop)
@@ -96,4 +95,4 @@ class LogWatcher(LoggingConfigurable):
             level, topic = self._extract_level(topic)
             if msg[-1] == '\n':
                 msg = msg[:-1]
-            self.log.log(level, "[%s] %s" % (topic, msg))
+            self.log.log(level, f"[{topic}] {msg}")

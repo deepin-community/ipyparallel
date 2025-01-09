@@ -13,14 +13,14 @@ but has key differences, justifying both existing:
   only engine *sets*
 - Cluster API can efficiently signal all engines via mpiexec
 """
+
 import asyncio
 import logging
 import os
 import pickle
 import signal
 import sys
-from subprocess import PIPE
-from subprocess import Popen
+from subprocess import PIPE, Popen
 from threading import Thread
 
 import psutil
@@ -30,8 +30,7 @@ from tornado.ioloop import IOLoop
 from traitlets.config import Config
 from zmq.eventloop.zmqstream import ZMQStream
 
-from ipyparallel import error
-from ipyparallel import util
+from ipyparallel import error, util
 from ipyparallel.util import local_logger
 
 
@@ -69,6 +68,7 @@ class KernelNanny:
         self.curve_secretkey = curve_secretkey
         self.config = config
         self.pipe = pipe
+        util._disable_session_extract_dates()
         self.session = Session(config=self.config)
 
         self.log = local_logger(f"{self.__class__.__name__}.{engine_id}", log_level)
@@ -189,7 +189,7 @@ class KernelNanny:
         self.parent_process.send_signal(sig)
         return {"status": "ok"}
 
-    def start(self):
+    async def start(self):
         self.log.info(
             f"Starting kernel nanny for engine {self.engine_id}, pid={self.pid}, nanny pid={os.getpid()}"
         )
@@ -232,16 +232,6 @@ class KernelNanny:
             )
         self.parent_stream = ZMQStream(self.parent_socket)
         self.parent_stream.on_recv_stream(self.dispatch_parent)
-        try:
-            self.loop.start()
-        finally:
-            self.loop.close(all_fds=True)
-            self.context.term()
-            try:
-                self.pipe.close()
-            except BrokenPipeError:
-                pass
-            self.log.debug("exiting")
 
     @classmethod
     def main(cls, *args, **kwargs):
@@ -253,11 +243,19 @@ class KernelNanny:
 
         Should be called in a subprocess.
         """
-        # start a new event loop for the forked process
-        asyncio.set_event_loop(asyncio.new_event_loop())
-        IOLoop().make_current()
         self = cls(*args, **kwargs)
-        self.start()
+        asyncio_loop = asyncio.new_event_loop()
+        asyncio_loop.run_until_complete(self.start())
+        try:
+            asyncio_loop.run_forever()
+        finally:
+            self.loop.close(all_fds=True)
+            self.context.term()
+            try:
+                self.pipe.close()
+            except BrokenPipeError:
+                pass
+            self.log.debug("exiting")
 
 
 def start_nanny(**kwargs):
@@ -300,7 +298,8 @@ def main():
     Loads kwargs from stdin,
     sets pipe to stdout
     """
-    kwargs = pickle.load(os.fdopen(sys.stdin.fileno(), mode='rb'))
+    with os.fdopen(sys.stdin.fileno(), mode='rb') as f:
+        kwargs = pickle.load(f)
     kwargs['pipe'] = sys.stdout
     KernelNanny.main(**kwargs)
 

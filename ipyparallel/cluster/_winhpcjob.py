@@ -1,19 +1,14 @@
-# encoding: utf-8
 """
 Job and task components for writing .xml files that the Windows HPC Server
 2008 can use to start jobs.
 """
+
 import os
 import re
 import uuid
 from xml.etree import ElementTree as ET
 
-from traitlets import Bool
-from traitlets import Enum
-from traitlets import Instance
-from traitlets import Integer
-from traitlets import List
-from traitlets import Unicode
+from traitlets import Bool, Enum, Instance, Integer, List, Unicode
 from traitlets.config.configurable import Configurable
 
 # -----------------------------------------------------------------------------
@@ -57,11 +52,10 @@ def find_username():
     if domain is None:
         return username
     else:
-        return '%s\\%s' % (domain, username)
+        return f'{domain}\\{username}'
 
 
 class WinHPCJob(Configurable):
-
     job_id = Unicode('')
     job_name = Unicode('MyJob', config=True)
     min_cores = Integer(1, config=True)
@@ -155,7 +149,6 @@ class WinHPCJob(Configurable):
 
 
 class WinHPCTask(Configurable):
-
     task_id = Unicode('')
     task_name = Unicode('')
     version = Unicode("2.000")
@@ -240,7 +233,6 @@ class IPEngineSetJob(WinHPCJob):
 
 
 class IPControllerTask(WinHPCTask):
-
     task_name = Unicode('IPController', config=True)
     controller_cmd = List(['ipcontroller.exe'], config=True)
     controller_args = List(['--log-level=40'], config=True)
@@ -257,7 +249,7 @@ class IPControllerTask(WinHPCTask):
     work_directory = Unicode('', config=False)
 
     def __init__(self, **kwargs):
-        super(IPControllerTask, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         the_uuid = uuid.uuid1()
         self.std_out_file_path = os.path.join('log', 'ipcontroller-%s.out' % the_uuid)
         self.std_err_file_path = os.path.join('log', 'ipcontroller-%s.err' % the_uuid)
@@ -268,7 +260,6 @@ class IPControllerTask(WinHPCTask):
 
 
 class IPEngineTask(WinHPCTask):
-
     task_name = Unicode('IPEngine', config=True)
     engine_cmd = List(['ipengine.exe'], config=True)
     engine_args = List(['--log-level=40'], config=True)
@@ -285,7 +276,7 @@ class IPEngineTask(WinHPCTask):
     work_directory = Unicode('', config=False)
 
     def __init__(self, **kwargs):
-        super(IPEngineTask, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         the_uuid = uuid.uuid1()
         self.std_out_file_path = os.path.join('log', 'ipengine-%s.out' % the_uuid)
         self.std_err_file_path = os.path.join('log', 'ipengine-%s.err' % the_uuid)

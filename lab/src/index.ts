@@ -1,24 +1,21 @@
 // IPython Parallel Lab extension derived from dask-labextension@f6141455d770ed7de564fc4aa403b9964cd4e617
 // License: BSD-3-Clause
 
+import { PageConfig } from "@jupyterlab/coreutils";
+
+import { TabPanel } from "@lumino/widgets";
+
 import {
   ILabShell,
-  ILayoutRestorer,
   JupyterFrontEnd,
   JupyterFrontEndPlugin,
 } from "@jupyterlab/application";
 
-import {
-  ICommandPalette,
-  ISessionContext,
-  IWidgetTracker,
-} from "@jupyterlab/apputils";
+import { ISessionContext, IWidgetTracker } from "@jupyterlab/apputils";
 
 import { CodeEditor } from "@jupyterlab/codeeditor";
 
 import { ConsolePanel, IConsoleTracker } from "@jupyterlab/console";
-
-import { IMainMenu } from "@jupyterlab/mainmenu";
 
 import { ISettingRegistry } from "@jupyterlab/settingregistry";
 
@@ -41,11 +38,13 @@ import { IClusterModel, ClusterManager } from "./clusters";
 import { Sidebar } from "./sidebar";
 
 import "../style/index.css";
+
 import logoSvgStr from "../style/logo.svg";
 
 import { CommandIDs } from "./commands";
 
 const PLUGIN_ID = "ipyparallel-labextension:plugin";
+const CATEGORY = "IPython Parallel";
 
 /**
  * The IPython Parallel extension.
@@ -53,16 +52,8 @@ const PLUGIN_ID = "ipyparallel-labextension:plugin";
 const plugin: JupyterFrontEndPlugin<void> = {
   activate,
   id: PLUGIN_ID,
-  requires: [
-    ICommandPalette,
-    IConsoleTracker,
-    ILabShell,
-    ILayoutRestorer,
-    IMainMenu,
-    INotebookTracker,
-    ISettingRegistry,
-    IStateDB,
-  ],
+  requires: [IConsoleTracker, INotebookTracker, ISettingRegistry, IStateDB],
+  optional: [ILabShell],
   autoStart: true,
 };
 
@@ -76,22 +67,22 @@ export default plugin;
  */
 async function activate(
   app: JupyterFrontEnd,
-  commandPalette: ICommandPalette,
   consoleTracker: IConsoleTracker,
-  labShell: ILabShell,
-  restorer: ILayoutRestorer,
-  mainMenu: IMainMenu,
   notebookTracker: INotebookTracker,
   settingRegistry: ISettingRegistry,
-  state: IStateDB
+  state: IStateDB,
+  labShell?: ILabShell | null,
 ): Promise<void> {
   const id = "ipp-cluster-launcher";
 
-  const clientCodeInjector = (model: IClusterModel) => {
-    const editor = Private.getCurrentEditor(
+  const isLab = !!labShell;
+  const isRetroTree = PageConfig.getOption("retroPage") == "tree";
+
+  const clientCodeInjector = async (model: IClusterModel) => {
+    const editor = await Private.getCurrentEditor(
       app,
       notebookTracker,
-      consoleTracker
+      consoleTracker,
     );
     if (!editor) {
       return;
@@ -112,9 +103,16 @@ async function activate(
   });
 
   // sidebar.title.iconClass = 'ipp-Logo jp-SideBar-tabIcon';
-  sidebar.title.caption = "IPython Parallel";
 
-  labShell.add(sidebar, "left", { rank: 200 });
+  if (isLab) {
+    labShell.add(sidebar, "left", { rank: 200 });
+    sidebar.title.caption = CATEGORY;
+  } else if (isRetroTree) {
+    const tabPanel = app.shell.currentWidget as TabPanel;
+    tabPanel.addWidget(sidebar);
+    tabPanel.tabBar.addTab(sidebar.title);
+    sidebar.title.label = CATEGORY;
+  }
 
   sidebar.clusterManager.activeClusterChanged.connect(async () => {
     const active = sidebar.clusterManager.activeCluster;
@@ -125,7 +123,7 @@ async function activate(
 
   // A function to create a new client for a session.
   const createClientForSession = async (
-    session: Session.ISessionConnection | null
+    session: Session.ISessionConnection | null,
   ) => {
     if (!session) {
       return;
@@ -146,7 +144,7 @@ async function activate(
 
   // A function to recreate a client on reconnect.
   const injectOnSessionStatusChanged = async (
-    sessionContext: ISessionContext
+    sessionContext: ISessionContext,
   ) => {
     if (
       sessionContext.session &&
@@ -160,7 +158,7 @@ async function activate(
   // A function to inject a client when a new session owner is added.
   const injectOnWidgetAdded = (
     _: IWidgetTracker<SessionOwner>,
-    widget: SessionOwner
+    widget: SessionOwner,
   ) => {
     widget.sessionContext.statusChanged.connect(injectOnSessionStatusChanged);
   };
@@ -202,14 +200,14 @@ async function activate(
         tracker.forEach(async (widget) => {
           await createClientForSession(widget.sessionContext.session);
           widget.sessionContext.statusChanged.connect(
-            injectOnSessionStatusChanged
+            injectOnSessionStatusChanged,
           );
         });
       });
 
       // When the active cluster changes, reinject the client.
       sidebar.clusterManager.activeClusterChanged.connect(
-        injectOnClusterChanged
+        injectOnClusterChanged,
       );
     }
   };
@@ -227,7 +225,7 @@ async function activate(
 
       const onSettingsChanged = () => {
         // Determine whether to use the auto-starting client.
-        autoStartClient = settings.get("autoStartClient").composite as boolean;
+        // autoStartClient = settings.get("autoStartClient").composite as boolean;
         updateTrackers();
       };
       onSettingsChanged();
@@ -239,7 +237,7 @@ async function activate(
         await sidebar.clusterManager.refresh();
         sidebar.clusterManager.setActiveCluster(cluster);
       }
-    }
+    },
   );
 
   // Add a command to inject client connection code for a given cluster model.
@@ -248,12 +246,12 @@ async function activate(
   // If either is not found, it bails.
   app.commands.addCommand(CommandIDs.injectClientCode, {
     label: "Inject IPython Client Connection Code",
-    execute: () => {
+    execute: async () => {
       const cluster = Private.clusterFromClick(app, sidebar.clusterManager);
       if (!cluster) {
         return;
       }
-      clientCodeInjector(cluster);
+      return await clientCodeInjector(cluster);
     },
   });
 
@@ -309,35 +307,35 @@ async function activate(
   });
 
   // Add a command to toggle the auto-starting client code.
-  app.commands.addCommand(CommandIDs.toggleAutoStartClient, {
-    label: "Auto-Start IPython Parallel",
-    isToggled: () => autoStartClient,
-    execute: async () => {
-      const value = !autoStartClient;
-      const key = "autoStartClient";
-      return settingRegistry
-        .set(PLUGIN_ID, key, value)
-        .catch((reason: Error) => {
-          console.error(
-            `Failed to set ${PLUGIN_ID}:${key} - ${reason.message}`
-          );
-        });
-    },
-  });
+  // app.commands.addCommand(CommandIDs.toggleAutoStartClient, {
+  //   label: "Auto-Start IPython Parallel",
+  //   isToggled: () => autoStartClient,
+  //   execute: async () => {
+  //     const value = !autoStartClient;
+  //     const key = "autoStartClient";
+  //     return settingRegistry
+  //       .set(PLUGIN_ID, key, value)
+  //       .catch((reason: Error) => {
+  //         console.error(
+  //           `Failed to set ${PLUGIN_ID}:${key} - ${reason.message}`
+  //         );
+  //       });
+  //   },
+  // });
 
-  // Add some commands to the menu and command palette.
-  mainMenu.settingsMenu.addGroup([
-    { command: CommandIDs.toggleAutoStartClient },
-  ]);
-  [CommandIDs.newCluster, CommandIDs.toggleAutoStartClient].forEach(
-    (command) => {
-      commandPalette.addItem({
-        category: "IPython Parallel",
-        command,
-        args: { isPalette: true },
-      });
-    }
-  );
+  // // Add some commands to the menu and command palette.
+  // mainMenu.settingsMenu.addGroup([
+  //   { command: CommandIDs.toggleAutoStartClient },
+  // ]);
+  // [CommandIDs.newCluster, CommandIDs.toggleAutoStartClient].forEach(
+  //   (command) => {
+  //     commandPalette.addItem({
+  //       category: "IPython Parallel",
+  //       command,
+  //       args: { isPalette: true },
+  //     });
+  //   }
+  // );
 
   // Add a context menu items.
   app.contextMenu.addItem({
@@ -373,7 +371,7 @@ namespace Private {
    * if it is valid and in python.
    */
   export async function shouldUseKernel(
-    kernel: Kernel.IKernelConnection | null | undefined
+    kernel: Kernel.IKernelConnection | null | undefined,
   ): Promise<boolean> {
     if (!kernel) {
       return false;
@@ -387,7 +385,7 @@ namespace Private {
    */
   export async function createClientForKernel(
     model: IClusterModel,
-    kernel: Kernel.IKernelConnection
+    kernel: Kernel.IKernelConnection,
   ): Promise<string> {
     const code = getClientCode(model);
     const content: KernelMessage.IExecuteRequestMsg["content"] = {
@@ -410,12 +408,12 @@ namespace Private {
    */
   export function injectClientCode(
     cluster: IClusterModel,
-    editor: CodeEditor.IEditor
+    editor: CodeEditor.IEditor,
   ): void {
     const cursor = editor.getCursorPosition();
     const offset = editor.getOffsetAt(cursor);
     const code = getClientCode(cluster);
-    editor.model.value.insert(offset, code);
+    editor.model.sharedModel.updateSource(offset, offset, code);
   }
 
   /**
@@ -436,7 +434,7 @@ rc`;
   export function getCurrentKernel(
     shell: ILabShell,
     notebookTracker: INotebookTracker,
-    consoleTracker: IConsoleTracker
+    consoleTracker: IConsoleTracker,
   ): Kernel.IKernelConnection | null | undefined {
     // Get a handle on the most relevant kernel,
     // whether it is attached to a notebook or a console.
@@ -462,11 +460,11 @@ rc`;
    * In the case of a notebook, it creates a new cell above the currently
    * active cell and then returns that.
    */
-  export function getCurrentEditor(
+  export async function getCurrentEditor(
     app: JupyterFrontEnd,
     notebookTracker: INotebookTracker,
-    consoleTracker: IConsoleTracker
-  ): CodeEditor.IEditor | null | undefined {
+    consoleTracker: IConsoleTracker,
+  ): Promise<CodeEditor.IEditor | null | undefined> {
     // Get a handle on the most relevant kernel,
     // whether it is attached to a notebook or a console.
     let current = app.shell.currentWidget;
@@ -474,18 +472,22 @@ rc`;
     if (current && notebookTracker.has(current)) {
       NotebookActions.insertAbove((current as NotebookPanel).content);
       const cell = (current as NotebookPanel).content.activeCell;
+      await cell.ready;
       editor = cell && cell.editor;
     } else if (current && consoleTracker.has(current)) {
       const cell = (current as ConsolePanel).console.promptCell;
+      await cell.ready;
       editor = cell && cell.editor;
     } else if (notebookTracker.currentWidget) {
       const current = notebookTracker.currentWidget;
       NotebookActions.insertAbove(current.content);
       const cell = current.content.activeCell;
+      await cell.ready;
       editor = cell && cell.editor;
     } else if (consoleTracker.currentWidget) {
       const current = consoleTracker.currentWidget;
       const cell = current.console.promptCell;
+      await cell.ready;
       editor = cell && cell.editor;
     }
     return editor;
@@ -496,7 +498,7 @@ rc`;
    */
   export function clusterFromClick(
     app: JupyterFrontEnd,
-    manager: ClusterManager
+    manager: ClusterManager,
   ): IClusterModel | undefined {
     const test = (node: HTMLElement) => !!node.dataset.clusterId;
     const node = app.contextMenuHitTest(test);

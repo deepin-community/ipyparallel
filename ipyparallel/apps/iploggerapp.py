@@ -1,14 +1,16 @@
 #!/usr/bin/env python
-# encoding: utf-8
 """
 A simple IPython logger application
 """
+
 from IPython.core.profiledir import ProfileDir
 from traitlets import Dict
 
-from ipyparallel.apps.baseapp import base_aliases
-from ipyparallel.apps.baseapp import BaseParallelApplication
-from ipyparallel.apps.baseapp import catch_config_error
+from ipyparallel.apps.baseapp import (
+    BaseParallelApplication,
+    base_aliases,
+    catch_config_error,
+)
 from ipyparallel.apps.logwatcher import LogWatcher
 
 # -----------------------------------------------------------------------------
@@ -36,21 +38,20 @@ aliases.update(dict(url='LogWatcher.url', topics='LogWatcher.topics'))
 
 
 class IPLoggerApp(BaseParallelApplication):
-
-    name = u'iplogger'
+    name = 'iplogger'
     description = _description
     classes = [LogWatcher, ProfileDir]
     aliases = Dict(aliases)
 
     @catch_config_error
     def initialize(self, argv=None):
-        super(IPLoggerApp, self).initialize(argv)
+        super().initialize(argv)
         self.init_watcher()
 
     def init_watcher(self):
         try:
             self.watcher = LogWatcher(parent=self, log=self.log)
-        except:
+        except BaseException:
             self.log.error("Couldn't start the LogWatcher", exc_info=True)
             self.exit(1)
         self.log.info("Listening for log messages on %r" % self.watcher.url)

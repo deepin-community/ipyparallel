@@ -4,6 +4,7 @@ defines the basic interface to a single IPython Parallel cluster
 
 starts/stops/polls controllers, engines, etc.
 """
+
 import asyncio
 import atexit
 import glob
@@ -21,29 +22,31 @@ from multiprocessing import cpu_count
 from weakref import WeakSet
 
 import IPython
-from traitlets import Any
-from traitlets import Bool
-from traitlets import default
-from traitlets import Dict
-from traitlets import Float
-from traitlets import import_item
-from traitlets import Instance
-from traitlets import Integer
-from traitlets import List
-from traitlets import Unicode
-from traitlets import validate
-from traitlets.config import Application
-from traitlets.config import Config
-from traitlets.config import LoggingConfigurable
+from traitlets import (
+    Any,
+    Bool,
+    Dict,
+    Float,
+    Instance,
+    Integer,
+    List,
+    Unicode,
+    default,
+    import_item,
+    validate,
+)
+from traitlets.config import Application, Config, LoggingConfigurable
 
-from . import launcher
 from .._async import AsyncFirst
 from ..traitlets import Launcher
-from ..util import _all_profile_dirs
-from ..util import _default_profile_dir
-from ..util import _locate_profiles
-from ..util import _traitlet_signature
-from ..util import abbreviate_profile_dir
+from ..util import (
+    _all_profile_dirs,
+    _default_profile_dir,
+    _locate_profiles,
+    _traitlet_signature,
+    abbreviate_profile_dir,
+)
+from . import launcher
 
 _suffix_chars = string.ascii_lowercase + string.digits
 
@@ -73,12 +76,17 @@ _atexit_cleanup_clusters.registered = False
 class Cluster(AsyncFirst, LoggingConfigurable):
     """Class representing an IPP cluster
 
-    i.e. one controller and a groups of engines
+    i.e. one controller and one or more groups of engines
 
     Can start/stop/monitor/poll cluster resources
 
     All async methods can be called synchronously with a `_sync` suffix,
     e.g. `cluster.start_cluster_sync()`
+
+    .. versionchanged:: 8.0
+        controller and engine launcher classes can be specified via
+        `Cluster(controller='ssh', engines='mpi')`
+        without the `_launcher_class` suffix.
     """
 
     # general configuration
@@ -149,6 +157,25 @@ class Cluster(AsyncFirst, LoggingConfigurable):
         config=True,
     )
 
+    send_engines_connection_env = Bool(
+        True,
+        config=True,
+        help="""
+        Wait for controller's connection info before passing to engines
+        via $IPP_CONNECTION_INFO environment variable.
+
+        Set to False to start engines immediately
+        without waiting for the controller's connection info to be available.
+
+        When True, no connection file movement is required.
+        False is mainly useful when submitting the controller may
+        take a long time in a job queue,
+        and the engines should enter the queue before the controller is running.
+
+        .. versionadded:: 8.0
+        """,
+    )
+
     controller_launcher_class = Launcher(
         default_value=launcher.LocalControllerLauncher,
         entry_point_group='ipyparallel.controller_launchers',
@@ -173,7 +200,7 @@ class Cluster(AsyncFirst, LoggingConfigurable):
 
         """,
         config=True,
-    )
+    ).tag(alias="controller")
 
     engine_launcher_class = Launcher(
         default_value=launcher.LocalEngineSetLauncher,
@@ -195,7 +222,7 @@ class Cluster(AsyncFirst, LoggingConfigurable):
 
         """,
         config=True,
-    )
+    ).tag(alias="engines")
 
     # controller configuration
 
@@ -244,6 +271,7 @@ class Cluster(AsyncFirst, LoggingConfigurable):
 
             handler = logging.StreamHandler(sys.stdout)
             log.handlers = [handler]
+            log.propagate = False
             return log
         elif self.parent and getattr(self.parent, 'log', None) is not None:
             return self.parent.log
@@ -263,10 +291,23 @@ class Cluster(AsyncFirst, LoggingConfigurable):
         """,
     )
     # private state
-    controller = Any()
-    engines = Dict()
+    controller = Any().tag(nosignature=True)
+    engines = Dict().tag(nosignature=True)
 
-    profile_config = Instance(Config, allow_none=False)
+    @property
+    def engine_set(self):
+        """Return the first engine set
+
+        Most clusters have only one engine set,
+        which is tedious to get to via the `engines` dict
+        with random engine set ids.
+
+        ..versionadded:: 8.0
+        """
+        if self.engines:
+            return next(iter(self.engines.values()))
+
+    profile_config = Instance(Config, allow_none=False).tag(nosignature=True)
 
     @default("profile_config")
     def _profile_config_default(self):
@@ -331,8 +372,28 @@ class Cluster(AsyncFirst, LoggingConfigurable):
         config.merge(direct_config)
         return config
 
-    def __init__(self, **kwargs):
+    @default("config")
+    def _default_config(self):
+        if self.load_profile:
+            return self.profile_config
+        else:
+            return Config()
+
+    def __init__(self, *, engines=None, controller=None, **kwargs):
         """Construct a Cluster"""
+        # handle more intuitive aliases, which match ipcluster cli args, etc.
+        if engines is not None:
+            if 'engine_launcher_class' in kwargs:
+                raise TypeError(
+                    "Only specify one of 'engines' or 'engine_launcher_class', not both"
+                )
+            kwargs['engine_launcher_class'] = engines
+        if controller is not None:
+            if 'controller_launcher_class' in kwargs:
+                raise TypeError(
+                    "Only specify one of 'controller' or 'controller_launcher_class', not both"
+                )
+            kwargs['controller_launcher_class'] = controller
         if 'parent' not in kwargs and 'config' not in kwargs:
             kwargs['parent'] = self._default_parent()
 
@@ -345,7 +406,6 @@ class Cluster(AsyncFirst, LoggingConfigurable):
             self.stop_cluster_sync()
 
     def __repr__(self):
-
         fields = {
             "cluster_id": repr(self.cluster_id),
         }
@@ -556,7 +616,7 @@ class Cluster(AsyncFirst, LoggingConfigurable):
                 atexit.register(_atexit_cleanup_clusters)
 
         self.controller = controller = self.controller_launcher_class(
-            work_dir=u'.',
+            work_dir='.',
             parent=self,
             log=self.log,
             profile_dir=self.profile_dir,
@@ -577,7 +637,10 @@ class Cluster(AsyncFirst, LoggingConfigurable):
                 )
 
         else:
+            # copy to make sure change events fire
+            controller_args = list(controller_args)
             add_args = controller_args.extend
+
         if self.controller_ip:
             add_args(['--ip=%s' % self.controller_ip])
         if self.controller_location:
@@ -623,7 +686,7 @@ class Cluster(AsyncFirst, LoggingConfigurable):
         if engine_set_id is None:
             engine_set_id = self._new_engine_set_id()
         engine_set = self.engines[engine_set_id] = self.engine_launcher_class(
-            work_dir=u'.',
+            work_dir='.',
             parent=self,
             log=self.log,
             profile_dir=self.profile_dir,
@@ -631,6 +694,12 @@ class Cluster(AsyncFirst, LoggingConfigurable):
             engine_set_id=engine_set_id,
             **kwargs,
         )
+        if self.send_engines_connection_env and self.controller:
+            self.log.debug("Setting $IPP_CONNECTION_INFO environment")
+            connection_info = await self.controller.get_connection_info()
+            connection_info_json = json.dumps(connection_info["engine"])
+            engine_set.environment["IPP_CONNECTION_INFO"] = connection_info_json
+
         if n is None:
             n = self.n
         n = getattr(engine_set, 'engine_count', n)
@@ -652,8 +721,17 @@ class Cluster(AsyncFirst, LoggingConfigurable):
         log(f"engine set stopped {engine_set_id}: {stop_data}")
         self.update_cluster_file()
 
-    async def start_and_connect(self, n=None):
+    async def start_and_connect(self, n=None, activate=False):
         """Single call to start a cluster and connect a client
+
+        If `activate` is given, a blocking DirectView on all engines will be created
+        and activated, registering `%px` magics for use in IPython
+
+        Example::
+
+            rc = await Cluster(engines="mpi").start_and_connect(n=8, activate=True)
+
+            %px print("hello, world!")
 
         Equivalent to::
 
@@ -661,16 +739,31 @@ class Cluster(AsyncFirst, LoggingConfigurable):
             client = await self.connect_client()
             await client.wait_for_engines(n, block=False)
 
-        .. versionadded: 7.1
+        .. versionadded:: 7.1
+
+        .. versionadded:: 8.1
+
+            activate argument.
         """
         if n is None:
             n = self.n
         await self.start_cluster(n=n)
         client = await self.connect_client()
+
+        if n is None:
+            # number of engines to wait for
+            # if not specified, derive current value from EngineSets
+            n = sum(engine_set.n for engine_set in self.engines.values())
+
         if n:
             await asyncio.wrap_future(
                 client.wait_for_engines(n, block=False, timeout=self.engine_timeout)
             )
+
+        if activate:
+            view = client[:]
+            view.block = True
+            view.activate()
         return client
 
     async def start_cluster(self, n=None):
@@ -910,7 +1003,6 @@ class ClusterManager(LoggingConfigurable):
             # TODO: only if it has any ipyparallel config files
             # *or* it's the default profile
             if init_default_clusters and not cluster_files:
-
                 cluster = Cluster(profile_dir=profile_dir, cluster_id="")
                 cluster_key = self._cluster_key(cluster)
                 if cluster_key not in self.clusters:

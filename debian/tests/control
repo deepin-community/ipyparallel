@@ -1,5 +1,9 @@
-Test-Command: pytest-3 /usr/lib/python3/dist-packages/ipyparallel
+Test-Command: pytest-3 -o asyncio_default_fixture_loop_scope="function" /usr/lib/python3/dist-packages/ipyparallel
 Features: test-name=upstream_testsuite-pytest
-Depends: python3-ipyparallel,
- python3-pytest, python3-pytest-cov, python3-testpath, python3-mock,
- python3-pytest-tornado, python3-pytest-asyncio
+Depends:
+ python3-ipyparallel,
+ python3-pytest,
+ python3-pytest-asyncio,
+ python3-pytest-cov,
+ python3-pytest-tornado,
+ python3-testpath

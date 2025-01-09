@@ -1,20 +1,12 @@
 import time
 from collections import deque
-from random import randint
-from random import random
+from random import randint, random
 from types import FunctionType
 
 import zmq
-from traitlets import Dict
-from traitlets import Enum
-from traitlets import Instance
-from traitlets import Integer
-from traitlets import List
-from traitlets import observe
+from traitlets import Dict, Enum, Instance, Integer, List, observe
 
-from ipyparallel import Dependency
-from ipyparallel import error
-from ipyparallel import util
+from ipyparallel import Dependency, error, util
 from ipyparallel.controller.scheduler import Scheduler
 
 try:
@@ -322,14 +314,12 @@ class TaskScheduler(Scheduler):
             # build fake error reply
             try:
                 raise error.EngineError(
-                    "Engine %r died while running task %r" % (engine, msg_id)
+                    f"Engine {engine!r} died while running task {msg_id!r}"
                 )
-            except:
+            except error.EngineError:
                 content = error.wrap_exception()
             # build fake metadata
-            md = dict(
-                status=u'error', engine=engine.decode('ascii'), date=util.utcnow()
-            )
+            md = dict(status='error', engine=engine.decode('ascii'), date=util.utcnow())
             msg = self.session.msg('apply_reply', content, parent=parent, metadata=md)
             raw_reply = list(
                 map(zmq.Message, self.session.serialize(msg, ident=idents))
@@ -368,7 +358,7 @@ class TaskScheduler(Scheduler):
         # get targets as a set of bytes objects
         # from a list of unicode objects
         targets = md.get('targets', [])
-        targets = set(t.encode("utf8", "replace") for t in targets)
+        targets = {t.encode("utf8", "replace") for t in targets}
 
         retries = md.get('retries', 0)
         self.retries[msg_id] = retries
@@ -477,7 +467,7 @@ class TaskScheduler(Scheduler):
 
         try:
             raise why()
-        except:
+        except Exception:
             content = error.wrap_exception()
         self.log.debug(
             "task %r failing as unreachable with: %s", msg_id, content['ename']

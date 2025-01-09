@@ -1,16 +1,14 @@
 import logging
 
 import zmq
-from traitlets import Bool
-from traitlets import Bytes
-from traitlets import Integer
-from traitlets import List
-from traitlets import Unicode
+from traitlets import Bool, Bytes, Integer, List, Unicode
 
 from ipyparallel import util
-from ipyparallel.controller.scheduler import get_common_scheduler_streams
-from ipyparallel.controller.scheduler import Scheduler
-from ipyparallel.controller.scheduler import ZMQStream
+from ipyparallel.controller.scheduler import (
+    Scheduler,
+    ZMQStream,
+    get_common_scheduler_streams,
+)
 
 
 class BroadcastScheduler(Scheduler):
@@ -49,7 +47,7 @@ class BroadcastScheduler(Scheduler):
     def send_to_sub_schedulers(
         self, msg, original_msg_id, targets, idents, is_coalescing
     ):
-        trunc = 2 ** self.max_depth
+        trunc = 2**self.max_depth
         fmt = f"0{self.max_depth + 1}b"
 
         # assign targets to sub-schedulers based on binary path
@@ -72,9 +70,9 @@ class BroadcastScheduler(Scheduler):
             targets_for_scheduler = targets_by_scheduler[i]
             if is_coalescing:
                 if targets_for_scheduler:
-                    self.accumulated_targets[original_msg_id][
-                        scheduler_id
-                    ] = targets_for_scheduler
+                    self.accumulated_targets[original_msg_id][scheduler_id] = (
+                        targets_for_scheduler
+                    )
                 else:
                     del self.accumulated_replies[original_msg_id][scheduler_id]
             msg['metadata']['targets'] = targets_for_scheduler
@@ -123,7 +121,7 @@ class BroadcastScheduler(Scheduler):
         try:
             idents, msg_list = self.session.feed_identities(raw_msg, copy=False)
             msg = self.session.deserialize(msg_list, content=False, copy=False)
-        except:
+        except Exception:
             self.log.error(
                 f'broadcast::Invalid broadcast msg: {raw_msg}', exc_info=True
             )

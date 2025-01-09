@@ -1,11 +1,110 @@
 [build-system]
 requires = [
-  "jupyterlab>=3.0.0,==3.*",
-  "packaging",
-  "setuptools>=40.8.0",
-  "wheel",
+  "jupyterlab==4.*",
+  "hatchling>=0.25",
 ]
-build-backend = "setuptools.build_meta"
+build-backend = "hatchling.build"
+
+[project]
+name = "ipyparallel"
+version = "8.8.0"
+authors = [{name = "IPython Development Team", email = "ipython-dev@scipy.org"}]
+license = {file = "COPYING.md"}
+readme = "README.md"
+description = "Interactive Parallel Computing with IPython"
+keywords = [
+    "Interactive",
+    "Interpreter",
+    "Shell",
+    "Parallel",
+]
+classifiers = [
+    "Framework :: Jupyter",
+    "Framework :: Jupyter :: JupyterLab",
+    "Framework :: Jupyter :: JupyterLab :: 3",
+    "Framework :: Jupyter :: JupyterLab :: Extensions",
+    "Framework :: Jupyter :: JupyterLab :: Extensions :: Prebuilt",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+]
+urls = {Homepage = "https://ipython.org"}
+requires-python = ">=3.8"
+dependencies = [
+    "entrypoints",
+    "decorator",
+    "pyzmq>=18",
+    "traitlets>=4.3",
+    "ipython>=4",
+    "jupyter_client>=5",
+    "ipykernel>=4.4",
+    "tornado>=5.1",
+    "psutil",
+    "python-dateutil>=2.1",
+    "tqdm",
+]
+
+[project.entry-points."ipyparallel.controller_launchers"]
+batch = "ipyparallel.cluster.launcher:BatchControllerLauncher"
+htcondor = "ipyparallel.cluster.launcher:HTCondorControllerLauncher"
+local = "ipyparallel.cluster.launcher:LocalControllerLauncher"
+lsf = "ipyparallel.cluster.launcher:LSFControllerLauncher"
+mpi = "ipyparallel.cluster.launcher:MPIControllerLauncher"
+pbs = "ipyparallel.cluster.launcher:PBSControllerLauncher"
+sge = "ipyparallel.cluster.launcher:SGEControllerLauncher"
+ssh = "ipyparallel.cluster.launcher:SSHControllerLauncher"
+slurm = "ipyparallel.cluster.launcher:SlurmControllerLauncher"
+winhpc = "ipyparallel.cluster.launcher:WindowsHPCControllerLauncher"
+
+[project.entry-points."ipyparallel.engine_launchers"]
+batch = "ipyparallel.cluster.launcher:BatchEngineSetLauncher"
+htcondor = "ipyparallel.cluster.launcher:HTCondorEngineSetLauncher"
+local = "ipyparallel.cluster.launcher:LocalEngineSetLauncher"
+lsf = "ipyparallel.cluster.launcher:LSFEngineSetLauncher"
+mpi = "ipyparallel.cluster.launcher:MPIEngineSetLauncher"
+pbs = "ipyparallel.cluster.launcher:PBSEngineSetLauncher"
+sge = "ipyparallel.cluster.launcher:SGEEngineSetLauncher"
+slurm = "ipyparallel.cluster.launcher:SlurmEngineSetLauncher"
+ssh = "ipyparallel.cluster.launcher:SSHEngineSetLauncher"
+sshproxy = "ipyparallel.cluster.launcher:SSHProxyEngineSetLauncher"
+winhpc = "ipyparallel.cluster.launcher:WindowsHPCEngineSetLauncher"
+
+[project.optional-dependencies]
+nbext = ["notebook", "jupyter_server"]
+serverextension = ["jupyter_server"]
+labextension = ["jupyter_server", "jupyterlab>=3"]
+retroextension = ["jupyter_server", "retrolab"]
+benchmark = ["asv"]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-asyncio",
+    "ipython[test]",
+    "testpath",
+]
+
+[project.scripts]
+ipcluster = "ipyparallel.cluster.app:main"
+ipcontroller = "ipyparallel.controller.app:main"
+ipengine = "ipyparallel.engine.app:main"
+
+# Used to call hatch_build.py
+[tool.hatch.build.hooks.custom]
+
+[tool.hatch.build]
+artifacts = [
+  "ipyparallel/labextension/**/*.*"
+]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"jupyter-config" = "etc/jupyter"
+"ipyparallel/nbextension/static" = "share/jupyter/nbextensions/ipyparallel"
+"ipyparallel/labextension" = "share/jupyter/labextensions/ipyparallel-labextension"
 
 [tool.black]
 skip-string-normalization = true
@@ -14,3 +113,95 @@ target_version = [
     "py37",
     "py38",
 ]
+
+[tool.isort]
+profile = "black"
+
+[tool.pytest.ini_options]
+addopts = "-raXs --durations 10 --color=yes"
+asyncio_mode = "auto"
+testpaths = [
+    "ipyparallel/tests"
+]
+filterwarnings = [
+  "error:::ipy*",
+  "error:::jupyter*",
+  "ignore:zmq.eventloop.ioloop:DeprecationWarning:jupyter*",
+  "ignore:unclosed event loop:ResourceWarning",
+  "ignore:unclosed socket <zmq.Socket:ResourceWarning",
+  "ignore:unclosed <socket.socket:ResourceWarning",
+  "ignore:unclosed file <_io.BufferedWriter:ResourceWarning",
+  "ignore:subprocess .* is still running:ResourceWarning",
+  "ignore:unclosed file <_io.BufferedRandom>:ResourceWarning",
+  # from older versions of ipykernel
+  "ignore:the imp module is:DeprecationWarning",
+  "ignore:The distutils package is:DeprecationWarning",
+  # new behavior in Jupyter Core 5.0+
+  "module:Jupyter is migrating its paths to use standard platformdirs:DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.format]
+quote-style = "preserve"
+
+[tool.ruff.lint]
+ignore = [
+    "F841", # unused variable
+    "E741", # ambiguous names
+    "E743", # ambiguous names
+]
+select = [
+    "E7", # comparisons
+    "E9", # syntax
+    "I", # isort
+    "UP", # pyupgrade
+    "F", # flake8
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["F841", "E741", "F401"]
+"**/__init__.py" = ["I", "F4"]
+"docs/source" = ["F402"]
+
+[tool.tbump]
+# Uncomment this if your project is hosted on GitHub:
+github_url = "https://github.com/jupyterhub/jupyterhub"
+
+[tool.tbump.version]
+current = "8.8.0"
+
+# pep440 regex
+regex = '''
+  (?P<major>\d+)
+  \.
+  (?P<minor>\d+)
+  \.
+  (?P<patch>\d+)
+  (?P<pre>((a|b|rc)\d+))?
+  (\.
+    (?P<dev>dev\d*)
+  )?
+  '''
+
+[tool.tbump.git]
+message_template = "Bump to {new_version}"
+tag_template = "{new_version}"
+
+# For each file to patch, add a [[tool.tbump.file]] config
+# section containing the path of the file, relative to the
+# pyproject.toml location.
+
+[[tool.tbump.file]]
+src = "ipyparallel/_version.py"
+search = '__version__ = "{current_version}"'
+
+[[tool.tbump.file]]
+src = "pyproject.toml"
+search = 'version = "{current_version}"'
+
+[[tool.tbump.file]]
+src = "package.json"
+search = '"version": "{current_version}"'
+version_template = "{major}.{minor}.{patch}"

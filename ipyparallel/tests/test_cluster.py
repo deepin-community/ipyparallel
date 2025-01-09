@@ -13,9 +13,10 @@ import pytest
 from traitlets.config import Config
 
 import ipyparallel as ipp
-from .clienttest import raises_remote
 from ipyparallel import cluster
 from ipyparallel.cluster.launcher import find_launcher_class
+
+from .clienttest import raises_remote
 
 _timeout = 30
 
@@ -59,11 +60,6 @@ async def test_ipython_log(ipython):
     assert c.log.handlers[0].stream is sys.stdout
 
 
-@pytest.fixture
-def engine_launcher_class():
-    return 'Local'
-
-
 async def test_start_stop_controller(Cluster):
     cluster = Cluster()
     await cluster.start_controller()
@@ -86,7 +82,7 @@ async def test_start_stop_controller(Cluster):
 
 
 async def test_start_stop_engines(Cluster, engine_launcher_class):
-    cluster = Cluster(engine_launcher_class=engine_launcher_class)
+    cluster = Cluster()
     await cluster.start_controller()
 
     n = 2
@@ -107,9 +103,9 @@ async def test_start_stop_engines(Cluster, engine_launcher_class):
     await cluster.stop_controller()
 
 
-async def test_start_stop_cluster(Cluster, engine_launcher_class):
+async def test_start_stop_cluster(Cluster):
     n = 2
-    cluster = Cluster(engine_launcher_class=engine_launcher_class, n=n)
+    cluster = Cluster(n=n)
     await cluster.start_cluster()
     controller = cluster.controller
     assert controller is not None
@@ -125,8 +121,8 @@ async def test_start_stop_cluster(Cluster, engine_launcher_class):
 @pytest.mark.skipif(
     sys.platform.startswith("win"), reason="Signal tests don't pass on Windows yet"
 )
-async def test_signal_engines(request, Cluster, engine_launcher_class):
-    cluster = Cluster(engine_launcher_class=engine_launcher_class)
+async def test_signal_engines(request, Cluster):
+    cluster = Cluster()
     await cluster.start_controller()
     engine_set_id = await cluster.start_engines(n=2)
     rc = await cluster.connect_client()
@@ -157,9 +153,9 @@ async def test_signal_engines(request, Cluster, engine_launcher_class):
     await cluster.stop_controller()
 
 
-async def test_restart_engines(Cluster, engine_launcher_class):
+async def test_restart_engines(Cluster):
     n = 2
-    async with Cluster(engine_launcher_class=engine_launcher_class, n=n) as rc:
+    async with Cluster(n=n) as rc:
         cluster = rc.cluster
         engine_set_id = next(iter(cluster.engines))
         engine_set = cluster.engines[engine_set_id]
@@ -173,6 +169,19 @@ async def test_restart_engines(Cluster, engine_launcher_class):
         rc.wait_for_engines(n, timeout=_timeout)
         after_pids = rc[:].apply_sync(os.getpid)
         assert set(after_pids).intersection(before_pids) == set()
+
+
+async def test_get_output(Cluster):
+    n = 2
+    async with Cluster(n=n) as rc:
+        cluster = rc.cluster
+        engine_set_id = next(iter(cluster.engines))
+        engine_set = cluster.engines[engine_set_id]
+    out = engine_set.get_output()
+    print(f"---engine output---\n{out}\n---end engine output---")
+    assert out
+    assert 'Completed registration with id 0' in out
+    assert 'Completed registration with id 1' in out
 
 
 async def test_async_with(Cluster):
@@ -229,7 +238,7 @@ def test_load_profile(tmpdir):
     ],
 )
 def test_cluster_abbreviations(classname, expected_class):
-    c = cluster.Cluster(engine_launcher_class=classname)
+    c = cluster.Cluster(engines=classname)
     assert c.engine_launcher_class is expected_class
 
 
@@ -268,19 +277,22 @@ async def test_cluster_manager():
         m.remove_cluster("nosuchcluster")
 
 
-async def test_to_from_dict(Cluster, engine_launcher_class):
-    cluster = Cluster(engine_launcher_class=engine_launcher_class, n=2)
+async def test_to_from_dict(
+    Cluster,
+):
+    cluster = Cluster(n=2)
     print(cluster.config, cluster.controller_args)
     async with cluster as rc:
         d = cluster.to_dict()
         cluster2 = ipp.Cluster.from_dict(d)
         assert not cluster2.shutdown_atexit
         assert cluster2.controller is not None
-        assert cluster2.controller.process.pid == cluster.controller.process.pid
+        if isinstance(cluster2.controller, ipp.cluster.launcher.LocalProcessLauncher):
+            assert cluster2.controller.process.pid == cluster.controller.process.pid
         assert list(cluster2.engines) == list(cluster.engines)
 
-        es1 = next(iter(cluster.engines.values()))
-        es2 = next(iter(cluster2.engines.values()))
+        es1 = cluster.engine_set
+        es2 = cluster2.engine_set
         # ensure responsive
         rc[:].apply_async(lambda: None).get(timeout=_timeout)
         if not sys.platform.startswith("win"):
@@ -339,6 +351,7 @@ async def test_cluster_manager_notice_stop(Cluster):
     assert key not in cm.clusters
 
 
+@pytest.mark.skipif(os.name == 'nt', reason="Does not work on Windows")
 async def test_wait_for_engines_crash(Cluster):
     """wait_for_engines is cancelled when the engines stop"""
     c = Cluster(n=2, log_level=10)
@@ -348,3 +361,17 @@ async def test_wait_for_engines_crash(Cluster):
         rc = c.connect_client_sync()
         with pytest.raises(ipp.error.EngineError):
             rc.wait_for_engines(3, timeout=20)
+
+
+@pytest.mark.parametrize("activate", (True, False))
+def test_start_and_connect_activate(ipython, Cluster, activate):
+    rc = Cluster(n=2, log_level=10).start_and_connect_sync(activate=activate)
+    with rc:
+        if activate:
+            assert "px" in ipython.magics_manager.magics["cell"]
+            px = ipython.magics_manager.magics["cell"]["px"]
+            assert px.__self__.view.client is rc
+        else:
+            if "px" in ipython.magics_manager.magics["cell"]:
+                px = ipython.magics_manager.magics["cell"]["px"]
+                assert px.__self__.view.client is not rc

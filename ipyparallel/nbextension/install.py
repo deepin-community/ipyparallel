@@ -1,4 +1,8 @@
-"""Install the IPython clusters tab in the Jupyter notebook dashboard"""
+"""Install the IPython clusters tab in the Jupyter notebook dashboard
+
+Only applicable for notebook < 7
+"""
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 from jupyter_core.paths import jupyter_config_dir
@@ -11,16 +15,17 @@ def install_extensions(enable=True, user=False):
 
     Toggle with enable=True/False.
     """
-    from distutils.version import LooseVersion as V
     import notebook
 
-    if V(notebook.__version__) < V('4.2'):
+    from ipyparallel.util import _v
+
+    if _v(notebook.__version__) < _v('4.2'):
         return _install_extension_nb41(enable)
 
     from notebook.nbextensions import (
-        install_nbextension_python,
-        enable_nbextension,
         disable_nbextension,
+        enable_nbextension,
+        install_nbextension_python,
     )
     from notebook.serverextensions import toggle_serverextension_python
 

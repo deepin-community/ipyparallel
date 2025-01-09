@@ -1,8 +1,7 @@
 """Custom ipyparallel trait types"""
+
 import entrypoints
-from traitlets import List
-from traitlets import TraitError
-from traitlets import Type
+from traitlets import List, TraitError, Type
 
 
 class Launcher(Type):
@@ -26,9 +25,7 @@ class Launcher(Type):
         chunks.append("Currently installed: ")
         for key, entry_point in self.load_entry_points().items():
             chunks.append(
-                "  - {}: {}.{}".format(
-                    key, entry_point.module_name, entry_point.object_name
-                )
+                f"  - {key}: {entry_point.module_name}.{entry_point.object_name}"
             )
         return '\n'.join(chunks)
 

@@ -1,21 +1,18 @@
 """base class for parallel client tests"""
-from __future__ import print_function
 
 import os
 import signal
 import sys
 import time
+import warnings
 from contextlib import contextmanager
 
 import pytest
 import zmq
 from decorator import decorator
-from zmq.tests import BaseZMQTestCase
 
-from ipyparallel import Client
-from ipyparallel import error
-from ipyparallel.tests import add_engines
-from ipyparallel.tests import launchers
+from ipyparallel import Client, error
+from ipyparallel.tests import add_engines, launchers
 
 # simple tasks for use in apply tests
 
@@ -58,7 +55,7 @@ def generate_output():
     a rich displayable object.
     """
 
-    from IPython.core.display import display, HTML, Math
+    from IPython.core.display import HTML, Math, display
 
     print("stdout")
     print("stderr", file=sys.stderr)
@@ -85,6 +82,9 @@ def skip_without(*names):
                 __import__(name)
             except ImportError:
                 pytest.skip("Test requires %s" % name)
+            except Exception as e:
+                warnings.warn(f"Unexpected exception importing {name}: {e}")
+                pytest.skip("Test requires %s" % name)
         return f(*args, **kwargs)
 
     return skip_without_names
@@ -101,6 +101,8 @@ def raises_remote(etype):
     try:
         try:
             yield
+        except error.AlreadyDisplayedError as e:
+            e.original_error.raise_exception()
         except error.CompositeError as e:
             e.raise_exception()
     except error.RemoteError as e:
@@ -118,7 +120,7 @@ def raises_remote(etype):
 
 
 @pytest.mark.usefixtures("cluster")
-class ClusterTestCase(BaseZMQTestCase):
+class ClusterTestCase:
     timeout = 10
     engine_count = 2
 
@@ -151,11 +153,6 @@ class ClusterTestCase(BaseZMQTestCase):
         """connect a client with my Context, and track its sockets for cleanup"""
         c = Client(profile='iptest', context=self.context)
         c.wait = lambda *a, **kw: self.client_wait(c, *a, **kw)
-
-        for name in filter(lambda n: n.endswith('socket'), dir(c)):
-            s = getattr(c, name)
-            s.setsockopt(zmq.LINGER, 0)
-            self.sockets.append(s)
         return c
 
     def assertRaisesRemote(self, etype, f, *args, **kwargs):
@@ -174,8 +171,8 @@ class ClusterTestCase(BaseZMQTestCase):
 
     test_timeout = 30
 
-    def setUp(self):
-        BaseZMQTestCase.setUp(self)
+    def setup_method(self):
+        self.context = zmq.Context.instance()
         if hasattr(signal, 'SIGALRM'):
             # use sigalarm for test timeout
             def _sigalarm(sig, frame):
@@ -194,8 +191,9 @@ class ClusterTestCase(BaseZMQTestCase):
         self.base_engine_count = len(self.client.ids)
         self.engines = []
 
-    def tearDown(self):
-        self.client[:].use_pickle()
+    def teardown_method(self):
+        if len(self.client):
+            self.client[:].use_pickle()
 
         # self.client.clear(block=True)
         # close fds:
@@ -205,7 +203,7 @@ class ClusterTestCase(BaseZMQTestCase):
         # allow flushing of incoming messages to prevent crash on socket close
         self.client.wait(timeout=2)
         self.client.close()
-        BaseZMQTestCase.tearDown(self)
         if hasattr(signal, 'SIGALRM'):
             signal.alarm(0)
             signal.signal(signal.SIGALRM, signal.SIG_DFL)
+        self.context.destroy()

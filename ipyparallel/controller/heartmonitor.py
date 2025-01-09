@@ -3,10 +3,10 @@
 A multi-heart Heartbeat system using PUB and ROUTER sockets. pings are sent out on the PUB,
 and hearts are tracked based on their DEALER identities.
 """
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
-from __future__ import print_function
-
+import asyncio
 import logging
 import time
 import uuid
@@ -14,22 +14,13 @@ import uuid
 import zmq
 from jupyter_client.session import Session
 from tornado import ioloop
-from traitlets import Bool
-from traitlets import default
-from traitlets import Dict
-from traitlets import Float
-from traitlets import Instance
-from traitlets import Integer
-from traitlets import Set
+from traitlets import Bool, Dict, Float, Instance, Integer, Set, default
 from traitlets.config.configurable import LoggingConfigurable
-from zmq.devices import ThreadDevice
-from zmq.devices import ThreadMonitoredQueue
+from zmq.devices import ThreadDevice, ThreadMonitoredQueue
 from zmq.eventloop.zmqstream import ZMQStream
 
-from ipyparallel.util import bind
-from ipyparallel.util import connect
-from ipyparallel.util import log_errors
-from ipyparallel.util import set_hwm
+from ipyparallel import util
+from ipyparallel.util import bind, connect, log_errors, set_hwm
 
 
 class Heart:
@@ -131,6 +122,7 @@ class HeartMonitor(LoggingConfigurable):
 
     @default("session")
     def _default_session(self):
+        util._disable_session_extract_dates()
         return Session(parent=self)
 
     loop = Instance(ioloop.IOLoop)
@@ -189,7 +181,7 @@ class HeartMonitor(LoggingConfigurable):
         new_probation = {}
         for cur_heart in (b for b in missed_beats if b in hearts):
             miss_count = on_probation.get(cur_heart, 0) + 1
-            self.log.info("heartbeat::missed %s : %s" % (cur_heart, miss_count))
+            self.log.info(f"heartbeat::missed {cur_heart} : {miss_count}")
             if miss_count > self.max_heartmonitor_misses:
                 failures.append(cur_heart)
             else:
@@ -253,24 +245,21 @@ class HeartMonitor(LoggingConfigurable):
             )
 
 
-def start_heartmonitor(
+async def _setup_heartmonitor(
+    ctx,
     ping_url,
     pong_url,
     monitor_url,
     log_level=logging.INFO,
     curve_publickey=None,
     curve_secretkey=None,
-    **kwargs,
+    **heart_monitor_kwargs,
 ):
-    """Start a heart monitor.
+    """Set up heart monitor
 
     For use in a background process,
     via Process(target=start_heartmonitor)
     """
-    loop = ioloop.IOLoop()
-    loop.make_current()
-    ctx = zmq.Context()
-
     ping_socket = ctx.socket(zmq.PUB)
     bind(
         ping_socket,
@@ -304,18 +293,47 @@ def start_heartmonitor(
     from .app import IPController
 
     app = IPController(log_level=log_level)
-    kwargs['log'] = app.log
+    heart_monitor_kwargs['log'] = app.log
 
     heart_monitor = HeartMonitor(
         ping_stream=ping_stream,
         pong_stream=pong_stream,
         monitor_stream=monitor_stream,
-        **kwargs,
+        **heart_monitor_kwargs,
     )
     heart_monitor.start()
 
+
+def start_heartmonitor(
+    ping_url,
+    pong_url,
+    monitor_url,
+    log_level=logging.INFO,
+    curve_publickey=None,
+    curve_secretkey=None,
+    **heart_monitor_kwargs,
+):
+    """Start a heart monitor.
+
+    For use in a background process,
+    via Process(target=start_heartmonitor)
+    """
+    ctx = zmq.Context()
+    loop = asyncio.new_event_loop()
     try:
-        loop.start()
+        loop.run_until_complete(
+            _setup_heartmonitor(
+                ctx=ctx,
+                ping_url=ping_url,
+                pong_url=pong_url,
+                monitor_url=monitor_url,
+                log_level=log_level,
+                curve_publickey=curve_publickey,
+                curve_secretkey=curve_secretkey,
+                **heart_monitor_kwargs,
+            )
+        )
+        loop.run_forever()
     finally:
-        loop.close(all_fds=True)
-    ctx.destroy()
+        loop.close()
+        ctx.destroy()

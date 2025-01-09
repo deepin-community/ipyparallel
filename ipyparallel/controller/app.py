@@ -1,12 +1,10 @@
 #!/usr/bin/env python
-# encoding: utf-8
 """
 The IPython controller application.
 """
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
-from __future__ import with_statement
-
 import json
 import os
 import socket
@@ -14,51 +12,50 @@ import stat
 import sys
 import time
 from multiprocessing import Process
-from signal import SIGABRT
-from signal import SIGINT
-from signal import signal
-from signal import SIGTERM
+from signal import SIGABRT, SIGINT, SIGTERM, signal
 
 import zmq
 from IPython.core.profiledir import ProfileDir
 from jupyter_client.localinterfaces import localhost
-from jupyter_client.session import Session
-from jupyter_client.session import session_aliases
-from jupyter_client.session import session_flags
-from traitlets import Bool
-from traitlets import Bytes
-from traitlets import default
-from traitlets import Dict
-from traitlets import import_item
-from traitlets import Instance
-from traitlets import Integer
-from traitlets import List
-from traitlets import observe
-from traitlets import Tuple
-from traitlets import Type
-from traitlets import Unicode
-from traitlets import Union
-from traitlets import validate
+from jupyter_client.session import Session, session_aliases, session_flags
+from traitlets import (
+    Bool,
+    Bytes,
+    Dict,
+    Instance,
+    Integer,
+    List,
+    Tuple,
+    Type,
+    Unicode,
+    Union,
+    default,
+    import_item,
+    observe,
+    validate,
+)
 from traitlets.config import Config
 from zmq.devices import ProcessMonitoredQueue
 from zmq.eventloop.zmqstream import ZMQStream
 from zmq.log.handlers import PUBHandler
 
-from .broadcast_scheduler import BroadcastScheduler
 from ipyparallel import util
-from ipyparallel.apps.baseapp import base_aliases
-from ipyparallel.apps.baseapp import base_flags
-from ipyparallel.apps.baseapp import BaseParallelApplication
-from ipyparallel.apps.baseapp import catch_config_error
+from ipyparallel.apps.baseapp import (
+    BaseParallelApplication,
+    base_aliases,
+    base_flags,
+    catch_config_error,
+)
 from ipyparallel.controller.broadcast_scheduler import launch_broadcast_scheduler
 from ipyparallel.controller.dictdb import DictDB
-from ipyparallel.controller.heartmonitor import HeartMonitor
-from ipyparallel.controller.heartmonitor import start_heartmonitor
+from ipyparallel.controller.heartmonitor import HeartMonitor, start_heartmonitor
 from ipyparallel.controller.hub import Hub
 from ipyparallel.controller.scheduler import launch_scheduler
 from ipyparallel.controller.task_scheduler import TaskScheduler
 from ipyparallel.traitlets import PortList
 from ipyparallel.util import disambiguate_url
+
+from .broadcast_scheduler import BroadcastScheduler
 
 # conditional import of SQLiteDB / MongoDB backend class
 real_dbs = []
@@ -170,8 +167,7 @@ _db_shortcuts = {
 
 
 class IPController(BaseParallelApplication):
-
-    name = u'ipcontroller'
+    name = 'ipcontroller'
     description = _description
     examples = _examples
     classes = [
@@ -203,14 +199,14 @@ class IPController(BaseParallelApplication):
         """,
     )
     ssh_server = Unicode(
-        u'',
+        '',
         config=True,
         help="""ssh url for clients to use when connecting to the Controller
         processes. It should be of the form: [user@]server[:port]. The
         Controller's listening addresses must be accessible from the ssh server""",
     )
     engine_ssh_server = Unicode(
-        u'',
+        '',
         config=True,
         help="""ssh url for engines to use when connecting to the Controller
         processes. It should be of the form: [user@]server[:port]. The
@@ -335,7 +331,7 @@ class IPController(BaseParallelApplication):
 
     @default('number_of_leaf_schedulers')
     def get_number_of_leaf_schedulers(self):
-        return 2 ** self.broadcast_scheduler_depth
+        return 2**self.broadcast_scheduler_depth
 
     @default('number_of_broadcast_schedulers')
     def get_number_of_broadcast_schedulers(self):
@@ -346,7 +342,7 @@ class IPController(BaseParallelApplication):
         return self.number_of_broadcast_schedulers - self.number_of_leaf_schedulers
 
     ports = PortList(
-        Integer(min_value=1, max_value=65536),
+        Integer(min=1, max=65536),
         config=True,
         help="""
         Pool of ports to use for the controller.
@@ -742,14 +738,14 @@ class IPController(BaseParallelApplication):
             except Exception as e:
                 self.log.error("Failed to cleanup connection file: %s", e)
             else:
-                self.log.debug(u"removed %s", f)
+                self.log.debug("removed %s", f)
 
     def load_secondary_config(self):
         """secondary config, loading from JSON and setting defaults"""
         if self.reuse_files:
             try:
                 self.load_config_from_json()
-            except (AssertionError, IOError) as e:
+            except (AssertionError, OSError) as e:
                 self.log.error("Could not load config from JSON: %s" % e)
             else:
                 # successfully loaded config from JSON, and reuse=True
@@ -781,7 +777,7 @@ class IPController(BaseParallelApplication):
         # build connection dicts
         if not self.engine_info:
             self.engine_info = {
-                'interface': "%s://%s" % (self.engine_transport, self.engine_ip),
+                'interface': f"{self.engine_transport}://{self.engine_ip}",
                 'registration': registration_port,
                 'control': self.next_port('engine'),
                 'mux': self.next_port('engine'),
@@ -797,7 +793,7 @@ class IPController(BaseParallelApplication):
 
         if not self.client_info:
             self.client_info = {
-                'interface': "%s://%s" % (self.client_transport, self.client_ip),
+                'interface': f"{self.client_transport}://{self.client_ip}",
                 'registration': registration_port,
                 'control': self.next_port('client'),
                 'mux': self.next_port('client'),
@@ -815,7 +811,7 @@ class IPController(BaseParallelApplication):
         broadcast_ids = []  # '0', '00', '01', '001', etc.
         # always a leading 0 for the root node
         for d in range(1, self.broadcast_scheduler_depth + 1):
-            for i in range(2 ** d):
+            for i in range(2**d):
                 broadcast_ids.append(format(i, f"0{d + 1}b"))
         self.internal_info = {
             'interface': internal_interface,
@@ -928,9 +924,9 @@ class IPController(BaseParallelApplication):
             # save to new json config files
             base = {
                 'key': self.session.key.decode('ascii'),
-                'curve_serverkey': self.curve_publickey.decode("ascii")
-                if self.enable_curve
-                else None,
+                'curve_serverkey': (
+                    self.curve_publickey.decode("ascii") if self.enable_curve else None
+                ),
                 'location': self.location,
                 'pack': self.session.packer,
                 'unpack': self.session.unpacker,
@@ -987,9 +983,9 @@ class IPController(BaseParallelApplication):
             'mon_addr': monitor_url,
             'not_addr': disambiguate_url(self.client_url('notification')),
             'reg_addr': disambiguate_url(self.client_url('registration')),
-            'identity': identity
-            if identity is not None
-            else bytes(scheduler_name, 'utf8'),
+            'identity': (
+                identity if identity is not None else bytes(scheduler_name, 'utf8')
+            ),
             'logname': logname,
             'loglevel': self.log_level,
             'log_url': self.log_url,
@@ -1000,7 +996,6 @@ class IPController(BaseParallelApplication):
 
     def launch_broadcast_schedulers(self, monitor_url, children):
         def launch_in_thread_or_process(scheduler_args, depth, identity):
-
             if 'Process' in self.mq_class:
                 # run the Python scheduler in a Process
                 q = Process(
@@ -1016,7 +1011,6 @@ class IPController(BaseParallelApplication):
                 launch_broadcast_scheduler(**scheduler_args)
 
         def recursively_start_schedulers(identity, depth):
-
             outgoing_id1 = identity + '0'
             outgoing_id2 = identity + '1'
             is_leaf = depth == self.broadcast_scheduler_depth
@@ -1224,7 +1218,7 @@ class IPController(BaseParallelApplication):
 
     @catch_config_error
     def initialize(self, argv=None):
-        super(IPController, self).initialize(argv)
+        super().initialize(argv)
         self.forward_logging()
         self.load_secondary_config()
         self.init_hub()

@@ -1,7 +1,13 @@
-# coding: utf-8
 """The IPython ZMQ-based parallel computing interface."""
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
+# export return_when constants
+import os
+from concurrent.futures import ALL_COMPLETED  # noqa
+from concurrent.futures import FIRST_COMPLETED  # noqa
+from concurrent.futures import FIRST_EXCEPTION  # noqa
+
 from traitlets.config.configurable import MultipleInstanceError
 
 from ._version import __version__  # noqa
@@ -31,6 +37,7 @@ def bind_kernel(**kwargs):
     This function returns immediately.
     """
     from ipykernel.kernelapp import IPKernelApp
+
     from ipyparallel.engine.app import IPEngine
 
     # first check for IPKernelApp, in which case this should be a no-op
@@ -95,3 +102,5 @@ def _load_jupyter_server_extension(app):
 
 # backward-compat
 load_jupyter_server_extension = _load_jupyter_server_extension
+
+_NONINTERACTIVE = os.getenv("IPP_NONINTERACTIVE", "") not in {"", "0"}

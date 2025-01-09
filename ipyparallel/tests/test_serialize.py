@@ -1,4 +1,5 @@
 """test serialization tools"""
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 import pickle
@@ -7,10 +8,8 @@ from collections import namedtuple
 import pytest
 
 from ipyparallel import interactive
-from ipyparallel.serialize import deserialize_object
-from ipyparallel.serialize import serialize_object
-from ipyparallel.serialize.canning import CannedArray
-from ipyparallel.serialize.canning import CannedClass
+from ipyparallel.serialize import deserialize_object, serialize_object
+from ipyparallel.serialize.canning import CannedArray, CannedClass
 
 # -------------------------------------------------------------------------------
 # Globals and Utilities

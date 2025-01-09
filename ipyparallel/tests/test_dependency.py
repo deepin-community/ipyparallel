@@ -1,11 +1,12 @@
 """Tests for dependency.py"""
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 import ipyparallel as ipp
-from .clienttest import ClusterTestCase
-from ipyparallel.serialize import can
-from ipyparallel.serialize import uncan
+from ipyparallel.serialize import can, uncan
 from ipyparallel.util import interactive
+
+from .clienttest import ClusterTestCase, raises_remote
 
 
 @ipp.require('time')
@@ -24,9 +25,9 @@ completed = list(map(str, range(0, 10, 2)))
 failed = list(map(str, range(1, 10, 2)))
 
 
-class DependencyTest(ClusterTestCase):
-    def setUp(self):
-        ClusterTestCase.setUp(self)
+class TestDependency(ClusterTestCase):
+    def setup_method(self):
+        super().setup_method()
         self.user_ns = {'__builtins__': __builtins__}
         self.view = self.client.load_balanced_view()
         self.dview = self.client[-1]
@@ -34,26 +35,22 @@ class DependencyTest(ClusterTestCase):
         self.failed = set(map(str, range(1, 25, 2)))
 
     def assertMet(self, dep):
-        self.assertTrue(
-            dep.check(self.succeeded, self.failed), "Dependency should be met"
-        )
+        assert dep.check(self.succeeded, self.failed), "Dependency should be met"
 
     def assertUnmet(self, dep):
-        self.assertFalse(
-            dep.check(self.succeeded, self.failed), "Dependency should not be met"
-        )
+        assert not dep.check(
+            self.succeeded, self.failed
+        ), "Dependency should not be met"
 
     def assertUnreachable(self, dep):
-        self.assertTrue(
-            dep.unreachable(self.succeeded, self.failed),
-            "Dependency should be unreachable",
-        )
+        assert dep.unreachable(
+            self.succeeded, self.failed
+        ), "Dependency should be unreachable"
 
     def assertReachable(self, dep):
-        self.assertFalse(
-            dep.unreachable(self.succeeded, self.failed),
-            "Dependency should be reachable",
-        )
+        assert not dep.unreachable(
+            self.succeeded, self.failed
+        ), "Dependency should be reachable"
 
     def cancan(self, f):
         """decorator to pass through canning into self.user_ns"""
@@ -69,7 +66,7 @@ class DependencyTest(ClusterTestCase):
             return base64.b64encode(arg)  # noqa: F821
 
         # must pass through canning to properly connect namespaces
-        self.assertEqual(encode(b'foo'), b'Zm9v')
+        assert encode(b'foo') == b'Zm9v'
 
     def test_success_only(self):
         dep = ipp.Dependency(mixed, success=True, failure=False)
@@ -110,9 +107,10 @@ class DependencyTest(ClusterTestCase):
             return func(a)
 
         self.client[:].clear()
-        self.assertRaisesRemote(NameError, self.view.apply_sync, bar, 5)
+        with raises_remote(NameError):
+            self.view.apply_sync(bar, 5)
         ar = self.view.apply_async(bar2, 5)
-        self.assertEqual(ar.get(5), func(5))
+        assert ar.get(5) == func(5)
 
     def test_require_object(self):
         @ipp.require(foo=func)
@@ -121,4 +119,4 @@ class DependencyTest(ClusterTestCase):
             return foo(a)  # noqa: F821
 
         ar = self.view.apply_async(bar, 5)
-        self.assertEqual(ar.get(5), func(5))
+        assert ar.get(5) == func(5)

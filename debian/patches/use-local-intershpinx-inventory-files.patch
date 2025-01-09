@@ -1,10 +1,17 @@
 From: Joe Nahmias <joe@nahmias.net>
 Date: Sat, 12 Sep 2020 22:20:56 -0400
 Subject: use local intershpinx inventory files
+
 Forwarded: not-needed
---- ipyparallel.orig/docs/source/conf.py
-+++ ipyparallel/docs/source/conf.py
-@@ -353,11 +353,26 @@
+---
+ docs/source/conf.py | 25 ++++++++++++++++++++-----
+ 1 file changed, 20 insertions(+), 5 deletions(-)
+
+diff --git a/docs/source/conf.py b/docs/source/conf.py
+index a5b6818..dc257a8 100644
+--- a/docs/source/conf.py
++++ b/docs/source/conf.py
+@@ -359,11 +359,26 @@ texinfo_documents = [
  
  # Example configuration for intersphinx: refer to the Python standard library.
  intersphinx_mapping = {
@@ -35,4 +42,4 @@ Forwarded: not-needed
 +  ),
  }
  
- 
+ import os

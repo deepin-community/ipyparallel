@@ -1,21 +1,29 @@
-Description: Fix test expecting the machine to have a public IP Address
-Author: Joseph Nahmias <joe@nahmias.net>
+From: Joseph Nahmias <joe@nahmias.net>
+Date: Wed, 30 Oct 2024 15:14:29 +0100
+Subject: Fix test expecting the machine to have a public IP Address
+
 Last-Update: 2020-09-06
 Forwarded: not-needed
---- ipyparallel.orig/ipyparallel/tests/test_util.py
-+++ ipyparallel/ipyparallel/tests/test_util.py
-@@ -10,7 +10,6 @@
- @mock.patch('warnings.warn')
- def test_disambiguate_ip(warn_mock):
+---
+ ipyparallel/tests/test_util.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ipyparallel/tests/test_util.py b/ipyparallel/tests/test_util.py
+index 8d7c080..49d2e05 100644
+--- a/ipyparallel/tests/test_util.py
++++ b/ipyparallel/tests/test_util.py
+@@ -8,7 +8,6 @@ from ipyparallel import util
+ 
+ def test_disambiguate_ip():
      # garbage in, garbage out
 -    public_ip = public_ips()[0]
      assert util.disambiguate_ip_address('garbage') == 'garbage'
      assert util.disambiguate_ip_address('0.0.0.0', socket.gethostname()) == localhost()
      wontresolve = 'this.wontresolve.dns'
-@@ -20,4 +19,5 @@
-         '[Errno -2] Name or service not known'.format(wontresolve),
-         RuntimeWarning,
-     )
+@@ -16,4 +15,5 @@ def test_disambiguate_ip():
+         RuntimeWarning, match=f"IPython could not determine IPs for {wontresolve}"
+     ):
+         assert util.disambiguate_ip_address('0.0.0.0', wontresolve) == wontresolve
 -    assert util.disambiguate_ip_address('0.0.0.0', public_ip) == localhost()
 +    for ip in public_ips():
 +        assert util.disambiguate_ip_address('0.0.0.0', ip) == localhost()

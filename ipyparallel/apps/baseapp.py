@@ -1,26 +1,23 @@
-# encoding: utf-8
 """
 The Base Application class for ipyparallel apps
 """
+
 import logging
 import os
 import re
 import sys
 
 import traitlets
+from IPython.core.application import BaseIPythonApplication
 from IPython.core.application import base_aliases as base_ip_aliases
 from IPython.core.application import base_flags as base_ip_flags
-from IPython.core.application import BaseIPythonApplication
 from IPython.utils.path import expand_path
 from jupyter_client.session import Session
 from tornado.ioloop import IOLoop
-from traitlets import Bool
-from traitlets import default
-from traitlets import Instance
-from traitlets import observe
-from traitlets import Unicode
-from traitlets.config.application import catch_config_error
-from traitlets.config.application import LevelFormatter
+from traitlets import Bool, Instance, Unicode, default, observe
+from traitlets.config.application import LevelFormatter, catch_config_error
+
+from ipyparallel import util
 
 from .._version import __version__
 
@@ -90,7 +87,7 @@ class BaseParallelApplication(BaseIPythonApplication):
 
     def _log_format_default(self):
         """override default log format to include time"""
-        return u"%(asctime)s.%(msecs).03d [%(name)s]%(highlevel)s %(message)s"
+        return "%(asctime)s.%(msecs).03d [%(name)s]%(highlevel)s %(message)s"
 
     work_dir = Unicode(
         os.getcwd(), config=True, help='Set the working dir for the process.'
@@ -141,12 +138,21 @@ class BaseParallelApplication(BaseIPythonApplication):
     @catch_config_error
     def initialize(self, argv=None):
         """initialize the app"""
-        super(BaseParallelApplication, self).initialize(argv)
-        if "IPP_SESSION_KEY" in os.environ:
-            self.config.Session.key = os.environ["IPP_SESSION_KEY"].encode("ascii")
+        util._disable_session_extract_dates()
+        self.init_config_from_env()
+        super().initialize(argv)
         self.init_deprecated_config()
         self.to_work_dir()
         self.reinit_logging()
+
+    def init_config_from_env(self):
+        """Load any configuration from environment variables"""
+        if "IPP_SESSION_KEY" in os.environ:
+            self.config.Session.key = os.environ["IPP_SESSION_KEY"].encode("ascii")
+        if "IPP_CLUSTER_ID" in os.environ:
+            self.cluster_id = os.environ["IPP_CLUSTER_ID"]
+        if "IPP_PROFILE_DIR" in os.environ:
+            self.config.ProfileDir.location = os.environ["IPP_PROFILE_DIR"]
 
     def init_deprecated_config(self):
         if not self._deprecated_classes:
@@ -192,7 +198,7 @@ class BaseParallelApplication(BaseIPythonApplication):
                 if re.match(r'%s-\d+\.(log|err|out)' % self.name, f):
                     try:
                         os.remove(os.path.join(log_dir, f))
-                    except (OSError, IOError):
+                    except OSError:
                         # probably just conflict from sibling process
                         # already removing it
                         pass

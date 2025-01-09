@@ -3,10 +3,9 @@
 This is the master object that handles connections from engines and clients,
 and monitors traffic through the various queues.
 """
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
-from __future__ import print_function
-
 import inspect
 import json
 import os
@@ -19,23 +18,25 @@ import zmq
 from jupyter_client.jsonutil import parse_date
 from jupyter_client.session import Session
 from tornado import ioloop
-from traitlets import Any
-from traitlets import Bytes
-from traitlets import default
-from traitlets import Dict
-from traitlets import Float
-from traitlets import HasTraits
-from traitlets import Instance
-from traitlets import Integer
-from traitlets import Set
-from traitlets import Unicode
+from traitlets import (
+    Any,
+    Bytes,
+    Dict,
+    Float,
+    HasTraits,
+    Instance,
+    Integer,
+    Set,
+    Unicode,
+    default,
+)
 from traitlets.config import LoggingConfigurable
 from zmq.eventloop.zmqstream import ZMQStream
 
+from ipyparallel import error, util
+
 from ..util import extract_dates
 from .heartmonitor import HeartMonitor
-from ipyparallel import error
-from ipyparallel import util
 
 # internal:
 
@@ -361,7 +362,7 @@ class Hub(LoggingConfigurable):
         try:
             if handler is None:
                 raise KeyError("Bad Message Type: %r" % msg_type)
-        except:
+        except Exception:
             content = error.wrap_exception()
             self.log.error("Bad Message Type: %r", msg_type, exc_info=True)
             self.session.send(
@@ -598,7 +599,7 @@ class Hub(LoggingConfigurable):
         msg_id = parent['msg_id']
         header = msg['header']
         md = msg['metadata']
-        engine_uuid = md.get('engine', u'')
+        engine_uuid = md.get('engine', '')
         eid = self.by_ident.get(engine_uuid.encode("utf8"), None)
         status = md.get('status', None)
 
@@ -719,7 +720,7 @@ class Hub(LoggingConfigurable):
 
         header = msg['header']
         md = msg['metadata']
-        engine_uuid = md.get('engine', u'')
+        engine_uuid = md.get('engine', '')
         eid = self.by_ident.get(engine_uuid.encode("utf8"), None)
 
         status = md.get('status', None)
@@ -876,7 +877,7 @@ class Hub(LoggingConfigurable):
         )
 
     def register_engine(self, reg, msg):
-        """Register a new engine."""
+        """Begin registration of a new engine."""
         content = msg['content']
         try:
             uuid = content['uuid']
@@ -897,22 +898,22 @@ class Hub(LoggingConfigurable):
         if uuid.encode("utf8") in self.by_ident:
             try:
                 raise KeyError("uuid %r in use" % uuid)
-            except:
+            except Exception:
                 content = error.wrap_exception()
                 self.log.error("uuid %r in use", uuid, exc_info=True)
         else:
-            for h, ec in self.incoming_registrations.items():
-                if uuid == h:
+            for heart_id, ec in self.incoming_registrations.items():
+                if uuid == heart_id:
                     try:
                         raise KeyError("heart_id %r in use" % uuid)
-                    except:
+                    except Exception:
                         self.log.error("heart_id %r in use", uuid, exc_info=True)
                         content = error.wrap_exception()
                     break
                 elif uuid == ec.uuid:
                     try:
                         raise KeyError("uuid %r in use" % uuid)
-                    except:
+                    except Exception:
                         self.log.error("uuid %r in use", uuid, exc_info=True)
                         content = error.wrap_exception()
                     break
@@ -947,16 +948,28 @@ class Hub(LoggingConfigurable):
         """Unregister an engine that explicitly requested to leave."""
         try:
             eid = msg['content']['id']
-        except:
+        except Exception:
             self.log.error(
                 f"registration::bad request for engine for unregistration: {msg['content']}",
             )
             return
         if eid not in self.engines:
-            self.log.info(
-                f"registration::unregister_engine({eid}) already unregistered"
-            )
+            # engine not registered
+            # first, check for still-pending registration
+            remove_heart_id = None
+            for heart_id, ec in self.incoming_registrations.items():
+                if ec.id == eid:
+                    remove_heart_id = heart_id
+                    break
+            if remove_heart_id is not None:
+                self.log.info(f"registration::canceling registration {ec.id}:{ec.uuid}")
+                self.incoming_registrations.pop(remove_heart_id)
+            else:
+                self.log.info(
+                    f"registration::unregister_engine({eid}) already unregistered"
+                )
             return
+
         self.log.info(f"registration::unregister_engine({eid})")
         ec = self.engines[eid]
 
@@ -997,9 +1010,9 @@ class Hub(LoggingConfigurable):
             self.all_completed.add(msg_id)
             try:
                 raise error.EngineError(
-                    "Engine %r died while running task %r" % (eid, msg_id)
+                    f"Engine {eid!r} died while running task {msg_id!r}"
                 )
-            except:
+            except Exception:
                 content = error.wrap_exception()
             # build a fake header:
             header = {}
@@ -1052,7 +1065,7 @@ class Hub(LoggingConfigurable):
     def _purge_stalled_registration(self, heart):
         # flush monitor messages before purging
         # first heartbeat might be waiting to be handled
-        self.mon_stream.flush()
+        self.monitor.flush()
         if heart in self.incoming_registrations:
             ec = self.incoming_registrations.pop(heart)
             self.log.warning(
@@ -1070,7 +1083,7 @@ class Hub(LoggingConfigurable):
             self.log.debug("cleaning up engine state: %s", self.engine_state_file)
             try:
                 os.remove(self.engine_state_file)
-            except IOError:
+            except OSError:
                 self.log.error(
                     "Couldn't cleanup file: %s", self.engine_state_file, exc_info=True
                 )
@@ -1145,7 +1158,7 @@ class Hub(LoggingConfigurable):
         try:
             targets = content['targets']
             targets = self._validate_targets(targets)
-        except:
+        except Exception:
             content = error.wrap_exception()
             self.session.send(
                 self.query, "hub_error", content=content, ident=client_id, parent=msg
@@ -1175,7 +1188,7 @@ class Hub(LoggingConfigurable):
         targets = content['targets']
         try:
             targets = self._validate_targets(targets)
-        except:
+        except Exception:
             content = error.wrap_exception()
             self.session.send(
                 self.query, "hub_error", content=content, ident=client_id, parent=msg
@@ -1218,7 +1231,7 @@ class Hub(LoggingConfigurable):
             if pending:
                 try:
                     raise IndexError("msg pending: %r" % pending[0])
-                except:
+                except Exception:
                     reply = error.wrap_exception()
                     self.log.exception("Error dropping records")
             else:
@@ -1234,7 +1247,7 @@ class Hub(LoggingConfigurable):
                     if eid not in self.engines:
                         try:
                             raise IndexError("No such engine: %i" % eid)
-                        except:
+                        except Exception:
                             reply = error.wrap_exception()
                             self.log.exception("Error dropping records")
                         break
@@ -1417,7 +1430,7 @@ class Hub(LoggingConfigurable):
             else:
                 try:
                     raise KeyError('No such message: ' + msg_id)
-                except:
+                except Exception:
                     content = error.wrap_exception()
                 break
         self.session.send(

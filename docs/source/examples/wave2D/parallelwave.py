@@ -21,6 +21,7 @@ Authors
  * Min Ragan-Kelley
 
 """
+
 import argparse
 import time
 
@@ -60,7 +61,6 @@ def wave_saver(u, x, y, t):
 
 # main program:
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser()
     paa = parser.add_argument
     paa(
@@ -87,7 +87,7 @@ if __name__ == '__main__':
     paa(
         '--profile',
         type=str,
-        default=u'default',
+        default='default',
         help="Specify the ipcluster profile for the client to connect to.",
     )
     paa(
@@ -126,13 +126,17 @@ if __name__ == '__main__':
     else:
         num_procs = min(num_procs, partition[0] * partition[1])
 
-    assert (
-        partition[0] * partition[1] == num_procs
-    ), "can't map partition %s to %i engines" % (partition, num_procs)
+    assert partition[0] * partition[1] == num_procs, (
+        "can't map partition %s to %i engines"
+        % (
+            partition,
+            num_procs,
+        )
+    )
 
     # construct the View:
     view = rc[:num_procs]
-    print("Running %s system on %s processes until %f" % (grid, partition, tstop))
+    print(f"Running {grid} system on {partition} processes until {tstop:f}")
 
     # functions defining initial/boundary/source conditions
     def I(x, y):
@@ -189,8 +193,10 @@ if __name__ == '__main__':
         partition,
     )
     time.sleep(1)
+
     # convenience lambda to call solver.solve:
-    _solve = lambda *args, **kwargs: solver.solve(*args, **kwargs)
+    def _solve(*args, **kwargs):
+        return solver.solve(*args, **kwargs)
 
     if ns.scalar:
         impl['inner'] = 'scalar'
@@ -226,7 +232,7 @@ if __name__ == '__main__':
         else:
             norm = -1
         t1 = time.time()
-        print('scalar inner-version, Wtime=%g, norm=%g' % (t1 - t0, norm))
+        print(f'scalar inner-version, Wtime={t1 - t0:g}, norm={norm:g}')
 
     # run again with faster numpy-vectorized inner implementation:
     impl['inner'] = 'vectorized'
@@ -262,7 +268,7 @@ if __name__ == '__main__':
     else:
         norm = -1
     t1 = time.time()
-    print('vector inner-version, Wtime=%g, norm=%g' % (t1 - t0, norm))
+    print(f'vector inner-version, Wtime={t1 - t0:g}, norm={norm:g}')
 
     # if ns.save is True, then u_hist stores the history of u as a list
     # If the partion scheme is Nx1, then u can be reconstructed via 'gather':

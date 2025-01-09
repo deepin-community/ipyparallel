@@ -1,3 +1,85 @@
+ipyparallel (8.8.0-4) unstable; urgency=medium
+
+  * Team upload.
+  * Define asyncio_default_fixture_loop_scope for pytest-asyncio >= 0.24.
+
+ -- Roland Mas <lolando@debian.org>  Wed, 30 Oct 2024 15:15:26 +0100
+
+ipyparallel (8.8.0-3) unstable; urgency=medium
+
+  * Team upload.
+  * Remove dependency on python3-ipython-genutils
+  * Add dependency on new package python3-autodoc-traits
+
+ -- Alexandre Detiste <tchet@debian.org>  Sat, 03 Aug 2024 23:14:32 +0200
+
+ipyparallel (8.8.0-2) unstable; urgency=medium
+
+  * Rebuild for unstable.
+
+ -- Emmanuel Arias <eamanu@debian.org>  Thu, 09 May 2024 08:44:58 -0300
+
+ipyparallel (8.8.0-1~exp1) experimental; urgency=medium
+
+  [ Alexandre Detiste ]
+  * Team upload.
+  * New upstream version 8.8.0 (Closes: #1063948, #1061744)
+  * wrap-and-sort -sa
+  * disable JS extension
+  * use new dh-sequence-python3
+  * update build dependencies:
+    - python3-mock
+    + python3-myst-nb
+    + python3-myst-parser
+    + python3-pydata-sphinx-theme
+    + python3-sphinxext-rediraffe deps
+
+  [ Emmanuel Arias ]
+  * d/salsa-ci.yml: Change release variable to experimental.
+  * d/control: Add pybuild-plugin-pyproject as B-Depends.
+  * d/control: Remove python3-setuptool from build dendencies, it was removed
+    by upstream.
+    - Add python3-hatchling and python3-entrypoints as build dependencies.
+  * d/rules: Use dh_auto_test instead of run pytest directly.
+    - Ignore RuntimeWarnings and DeprecationWarnings during the tests.
+  * d/rules: Remove override_dh_auto_test it is not longer needed.
+  * d/control: Remove python3-pytest-cov from build dependency it not needed.
+  * d/rules: Add PYBUILD_AFTER_INSTALL to move configuraiton files from
+    /usr/etc/jupyter to /etc/jupyter.
+  * d/control: Bump Standards-Version to 4.7.0 (from 4.6.0; no further changes
+    needed).
+
+ -- Emmanuel Arias <eamanu@debian.org>  Sat, 04 May 2024 18:00:12 -0300
+
+ipyparallel (7.1.0-5) unstable; urgency=medium
+
+  * Team upload.
+  * Drop python-distributed-doc (build) dependency (Closes: #1030920)
+
+ -- Jochen Sprickerhof <jspricke@debian.org>  Fri, 10 Feb 2023 09:32:47 +0100
+
+ipyparallel (7.1.0-4) unstable; urgency=medium
+
+  * Team upload.
+  * Add upstream patch for Python 3.11 (Closes: #1024916)
+
+ -- Jochen Sprickerhof <jspricke@debian.org>  Sat, 24 Dec 2022 10:00:11 +0100
+
+ipyparallel (7.1.0-3) unstable; urgency=medium
+
+  * Team Upload.
+  * Add patch to fix FTBFS with new setuptools (Closes: #1020036)
+
+ -- Nilesh Patra <nilesh@debian.org>  Thu, 03 Nov 2022 20:45:06 +0530
+
+ipyparallel (7.1.0-2) unstable; urgency=medium
+
+  [ Debian Janitor ]
+  * Set upstream metadata fields: Bug-Database, Bug-Submit, Repository,
+    Repository-Browse.
+
+ -- Jelmer Vernooĳ <jelmer@debian.org>  Thu, 26 May 2022 19:26:23 +0100
+
 ipyparallel (7.1.0-1) unstable; urgency=medium
 
   * Team upload.

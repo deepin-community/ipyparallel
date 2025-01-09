@@ -1,21 +1,28 @@
-Description: Mark test_wait_for_send as xfail
-Author: Joseph Nahmias <joe@nahmias.net>
+From: Joseph Nahmias <joe@nahmias.net>
+Date: Wed, 30 Oct 2024 15:14:29 +0100
+Subject: Mark test_wait_for_send as xfail
+
 Forwarded: not-needed
 Last-Update: 2020-09-29
+---
+ ipyparallel/tests/test_asyncresult.py | 2 ++
+ 1 file changed, 2 insertions(+)
 
---- ipyparallel.orig/ipyparallel/tests/test_asyncresult.py
-+++ ipyparallel/ipyparallel/tests/test_asyncresult.py
-@@ -2,6 +2,7 @@
+diff --git a/ipyparallel/tests/test_asyncresult.py b/ipyparallel/tests/test_asyncresult.py
+index a9873bc..fa91e98 100644
+--- a/ipyparallel/tests/test_asyncresult.py
++++ b/ipyparallel/tests/test_asyncresult.py
+@@ -3,6 +3,7 @@
  # Copyright (c) IPython Development Team.
  # Distributed under the terms of the Modified BSD License.
  import os
 +import pytest
  import time
+ from datetime import datetime
  
- from IPython.utils.io import capture_output
-@@ -354,6 +355,7 @@
-         self.assertIn('stdout', d)
-         self.assertIn('get', d)
+@@ -393,6 +394,7 @@ class TestAsyncResult(ClusterTestCase):
+         assert 'stdout' in d
+         assert 'get' in d
  
 +    @pytest.mark.xfail(reason="test isn't deterministic")
      def test_wait_for_send(self):

@@ -1,15 +1,9 @@
 """serialization utilities for apply messages"""
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 
-try:
-    import cPickle
-
-    pickle = cPickle
-except:
-    cPickle = None
-    import pickle
-_stdlib_pickle = pickle
+import pickle
 
 try:
     PICKLE_PROTOCOL = pickle.DEFAULT_PROTOCOL
@@ -18,17 +12,17 @@ except AttributeError:
 
 from itertools import chain
 
+from jupyter_client.session import MAX_BYTES, MAX_ITEMS
+
 from .canning import (
-    can,
-    uncan,
-    can_sequence,
-    uncan_sequence,
     CannedObject,
+    can,
+    can_sequence,
     istype,
     sequence_types,
+    uncan,
+    uncan_sequence,
 )
-from jupyter_client.session import MAX_ITEMS, MAX_BYTES
-
 
 # -----------------------------------------------------------------------------
 # Serialization Functions

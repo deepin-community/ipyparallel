@@ -1,8 +1,7 @@
 """A semi-synchronous Client for IPython parallel"""
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
-from __future__ import print_function
-
 import asyncio
 import json
 import os
@@ -16,9 +15,7 @@ from concurrent.futures import Future
 from functools import partial
 from getpass import getpass
 from pprint import pprint
-from threading import current_thread
-from threading import Event
-from threading import Thread
+from threading import Event, Thread, current_thread
 
 import jupyter_client.session
 import zmq
@@ -26,41 +23,36 @@ from decorator import decorator
 from ipykernel.comm import Comm
 from IPython import get_ipython
 from IPython.core.application import BaseIPythonApplication
-from IPython.core.profiledir import ProfileDir
-from IPython.core.profiledir import ProfileDirError
+from IPython.core.profiledir import ProfileDir, ProfileDirError
 from IPython.paths import get_ipython_dir
 from IPython.utils.capture import RichOutput
 from IPython.utils.coloransi import TermColors
 from IPython.utils.path import compress_user
-from jupyter_client.localinterfaces import is_local_ip
-from jupyter_client.localinterfaces import localhost
+from jupyter_client.localinterfaces import is_local_ip, localhost
 from jupyter_client.session import Session
 from tornado import ioloop
-from traitlets import Any
-from traitlets import Bool
-from traitlets import Bytes
-from traitlets import default
-from traitlets import Dict
-from traitlets import HasTraits
-from traitlets import Instance
-from traitlets import List
-from traitlets import Set
-from traitlets import Unicode
+from traitlets import (
+    Any,
+    Bool,
+    Bytes,
+    Dict,
+    HasTraits,
+    Instance,
+    List,
+    Set,
+    Unicode,
+    default,
+)
 from traitlets.config.configurable import MultipleInstanceError
 from zmq.eventloop.zmqstream import ZMQStream
 
-from .asyncresult import AsyncHubResult
-from .asyncresult import AsyncResult
-from .futures import MessageFuture
-from .futures import multi_future
-from .view import BroadcastView
-from .view import DirectView
-from .view import LoadBalancedView
-from ipyparallel import error
-from ipyparallel import serialize
-from ipyparallel import util
-from ipyparallel.serialize import PrePickled
-from ipyparallel.serialize import Reference
+import ipyparallel as ipp
+from ipyparallel import error, serialize, util
+from ipyparallel.serialize import PrePickled, Reference
+
+from .asyncresult import AsyncHubResult, AsyncResult
+from .futures import MessageFuture, multi_future
+from .view import BroadcastView, DirectView, LoadBalancedView
 
 pjoin = os.path.join
 jupyter_client.session.extract_dates = lambda obj: obj
@@ -75,7 +67,7 @@ def unpack_message(f, self, msg_parts):
     idents, msg = self.session.feed_identities(msg_parts, copy=False)
     try:
         msg = self.session.deserialize(msg, content=True, copy=False)
-    except:
+    except Exception:
         self.log.error("Invalid Message", exc_info=True)
     else:
         if self.debug:
@@ -185,10 +177,10 @@ class ExecuteReply(RichOutput):
             # add newline for multiline reprs
             text_out = '\n' + text_out
 
-        return u''.join(
+        return ''.join(
             [
                 out,
-                u'Out[%i:%i]: ' % (self.metadata['engine_id'], self.execution_count),
+                f"Out[{self.metadata['engine_id']}:{self.execution_count}]: ",
                 normal,
                 text_out,
             ]
@@ -357,9 +349,9 @@ class Client(HasTraits):
             except (AttributeError, MultipleInstanceError):
                 # could be a *different* subclass of config.Application,
                 # which would raise one of these two errors.
-                return u'default'
+                return 'default'
         else:
-            return u'default'
+            return 'default'
 
     _outstanding_dict = Instance('collections.defaultdict', (set,))
     _ids = List()
@@ -412,11 +404,10 @@ class Client(HasTraits):
         cluster=None,
         **extra_args,
     ):
-
         super_kwargs = {'debug': debug, 'cluster': cluster}
         if profile:
             super_kwargs['profile'] = profile
-        super(Client, self).__init__(**super_kwargs)
+        super().__init__(**super_kwargs)
         if context is not None:
             self._context = context
 
@@ -461,13 +452,13 @@ class Client(HasTraits):
                         break
             if not os.path.exists(connection_file):
                 msg = '\n'.join([f"Connection file {short!r} not found.", no_file_msg])
-                raise IOError(msg)
+                raise OSError(msg)
 
             with open(connection_file) as f:
                 connection_info = json.load(f)
 
         if connection_info is None:
-            raise IOError(no_file_msg)
+            raise OSError(no_file_msg)
 
         if isinstance(connection_info, dict):
             cfg = connection_info.copy()
@@ -476,7 +467,7 @@ class Client(HasTraits):
             connection_file = connection_info
             if not os.path.exists(connection_file):
                 # Connection file explicitly specified, but not found
-                raise IOError(
+                raise OSError(
                     f"Connection file {compress_user(connection_file)} not found. Is a controller running?"
                 )
 
@@ -505,7 +496,7 @@ class Client(HasTraits):
 
         proto, addr = cfg['interface'].split('://')
         addr = util.disambiguate_ip_address(addr, location)
-        cfg['interface'] = "%s://%s" % (proto, addr)
+        cfg['interface'] = f"{proto}://{addr}"
 
         # turn interface,port into full urls:
         for key in (
@@ -517,7 +508,7 @@ class Client(HasTraits):
             'registration',
             'broadcast',
         ):
-            cfg[key] = cfg['interface'] + ':%i' % cfg[key]
+            cfg[key] = f"{cfg['interface']}:{cfg[key]}"
 
         url = cfg['registration']
 
@@ -534,7 +525,6 @@ class Client(HasTraits):
                 and not sshserver
                 and location != socket.gethostname()
             ):
-
                 # warn if no ssh specified, but SSH is probably needed
                 # This is only a warning, because the most likely cause
                 # is a local Controller on a laptop whose IP is dynamic
@@ -580,6 +570,7 @@ class Client(HasTraits):
             )
             raise ValueError(msg.format(exc.message))
 
+        util._disable_session_extract_dates()
         self.session = Session(**extra_args)
 
         self._query_socket = self._context.socket(zmq.DEALER)
@@ -615,7 +606,7 @@ class Client(HasTraits):
 
         try:
             self._connect(sshserver, ssh_kwargs, timeout)
-        except:
+        except Exception:
             self.close(linger=0)
             raise
 
@@ -720,7 +711,7 @@ class Client(HasTraits):
             if targets < 0:
                 targets = self.ids[targets]
             if targets not in self._ids:
-                raise IndexError("No such engine: %i" % targets)
+                raise IndexError(f"No such engine: {targets}")
             targets = [targets]
 
         if isinstance(targets, slice):
@@ -811,7 +802,7 @@ class Client(HasTraits):
         """unwrap exception, and remap engine_id to int."""
         e = error.unwrap_exception(content)
         # print e.traceback
-        if e.engine_info:
+        if e.engine_info and 'engine_id' not in e.engine_info:
             e_uuid = e.engine_info['engine_uuid']
             eid = self._engines[e_uuid]
             e.engine_info['engine_id'] = eid
@@ -894,9 +885,9 @@ class Client(HasTraits):
                 continue
             try:
                 raise error.EngineError(
-                    "Engine %r died while running task %r" % (eid, msg_id)
+                    f"Engine {eid!r} died while running task {msg_id!r}"
                 )
-            except:
+            except Exception:
                 content = error.wrap_exception()
             # build a fake message:
             msg = self.session.msg('apply_reply', content=content)
@@ -1038,14 +1029,9 @@ class Client(HasTraits):
         """Make my IOLoop. Override with IOLoop.current to return"""
         # runs first thing in the io thread
         # always create a fresh asyncio loop for the thread
-        asyncio_loop = asyncio.new_event_loop()
-        if hasattr(asyncio, 'ProactorEventLoop') and isinstance(
-            asyncio_loop, asyncio.ProactorEventLoop
-        ):
-            asyncio_loop = asyncio.SelectorEventLoop()
-        asyncio.set_event_loop(asyncio_loop)
-        loop = ioloop.IOLoop()
-        loop.make_current()
+        if os.name == "nt":
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        loop = ioloop.IOLoop(make_current=False)
         return loop
 
     def _stop_io_thread(self):
@@ -1079,7 +1065,7 @@ class Client(HasTraits):
         self._io_thread.daemon = True
         self._io_thread.start()
         # wait for the IOLoop to start
-        for i in range(10):
+        for i in range(20):
             if evt.wait(1):
                 return
             if not self._io_thread.is_alive():
@@ -1148,6 +1134,14 @@ class Client(HasTraits):
 
         # init metadata:
         md = self.metadata[msg_id]
+
+        if md['engine_id'] is None and 'engine' in msg['metadata']:
+            e_uuid = msg['metadata']['engine']
+            try:
+                md['engine_uuid'] = e_uuid
+                md['engine_id'] = self._engines[e_uuid]
+            except KeyError:
+                pass
 
         ip = get_ipython()
 
@@ -1230,12 +1224,12 @@ class Client(HasTraits):
             for callback in msg_future.iopub_callbacks:
                 callback(msg)
 
-    def create_message_futures(self, msg_id, async_result=False, track=False):
-        msg_future = MessageFuture(msg_id, track=track)
+    def create_message_futures(self, msg_id, header, async_result=False, track=False):
+        msg_future = MessageFuture(msg_id, header=header, track=track)
         futures = [msg_future]
         self._futures[msg_id] = msg_future
         if async_result:
-            output = MessageFuture(msg_id)
+            output = MessageFuture(msg_id, header=header)
             # add future for output
             self._output_futures[msg_id] = output
             # hook up metadata
@@ -1263,7 +1257,7 @@ class Client(HasTraits):
 
         returns msg object"""
         if self._closed:
-            raise IOError("Connections have been closed.")
+            raise OSError("Connections have been closed.")
         msg = self.session.msg(
             msg_type, content=content, parent=parent, header=header, metadata=metadata
         )
@@ -1290,6 +1284,7 @@ class Client(HasTraits):
         if expect_reply:
             futures = self.create_message_futures(
                 msg_id,
+                msg['header'],
                 async_result=msg_type in {'execute_request', 'apply_request'},
                 track=track,
             )
@@ -1357,7 +1352,6 @@ class Client(HasTraits):
 
     @property
     def ids(self):
-        """Always up-to-date ids property."""
         # always copy:
         return list(self._ids)
 
@@ -1448,7 +1442,7 @@ class Client(HasTraits):
         return futures
 
     def wait_for_engines(
-        self, n, *, timeout=-1, block=True, interactive=None, widget=None
+        self, n=None, *, timeout=-1, block=True, interactive=None, widget=None
     ):
         """Wait for `n` engines to become available.
 
@@ -1483,6 +1477,18 @@ class Client(HasTraits):
         ------
         TimeoutError : if timeout is reached.
         """
+        if n is None:
+            # get n from cluster, if not specified
+            if self.cluster is None:
+                raise TypeError("n engines to wait for must be specified")
+
+            if self.cluster.n:
+                n = self.cluster.n
+            else:
+                # compute n from engine sets,
+                # e.g. the default where n is calculated at runtime from `cpu_count()`
+                n = sum(engine_set.n for engine_set in self.cluster.engines.values())
+
         if len(self.ids) >= n:
             if block:
                 return
@@ -1498,7 +1504,10 @@ class Client(HasTraits):
             seconds_remaining = 1000
 
         if interactive is None:
-            interactive = get_ipython() is not None
+            if ipp._NONINTERACTIVE:
+                interactive = False
+            else:
+                interactive = get_ipython() is not None
 
         if interactive:
             progress_bar = util.progress(
@@ -1518,10 +1527,17 @@ class Client(HasTraits):
                 if not engine_stop_future.done():
                     engine_stop_future.set_result(stop_data)
 
+            def _remove_signal_stopped(f, es):
+                try:
+                    es.stop_callbacks.remove(_signal_stopped)
+                except ValueError:
+                    # already removed
+                    pass
+
             for es in self.cluster.engines.values():
                 es.on_stop(_signal_stopped)
                 engine_stop_future.add_done_callback(
-                    lambda f: es.stop_callbacks.remove(_signal_stopped)
+                    partial(_remove_signal_stopped, es=es)
                 )
 
         future = Future()
@@ -1819,7 +1835,7 @@ class Client(HasTraits):
         scheduler_args : dict
             Keyword arguments (e.g. ip) to pass to the distributed.Scheduler constructor.
         **worker_args
-            Any additional keyword arguments (e.g. ncores) are passed to the distributed.Worker constructor.
+            Any additional keyword arguments (e.g. nthreads) are passed to the distributed.Worker constructor.
 
         Returns
         -------
@@ -1848,8 +1864,13 @@ class Client(HasTraits):
         # Start a Worker on the selected engines:
         worker_args['address'] = distributed_info['address']
         worker_args['nanny'] = nanny
-        # set default ncores=1, since that's how an IPython cluster is typically set up.
-        worker_args.setdefault('ncores', 1)
+        # distributed 2.0 renamed ncores to nthreads
+        if int(distributed.__version__.partition(".")[0]) >= 2:
+            nthreads = "nthreads"
+        else:
+            nthreads = "ncores"
+        # set default nthreads=1, since that's how an IPython cluster is typically set up.
+        worker_args.setdefault(nthreads, 1)
         dview.apply_sync(util.become_dask_worker, **worker_args)
 
         # Finally, return a Client connected to the Scheduler
@@ -2078,6 +2099,7 @@ class Client(HasTraits):
             client=self,
             socket=self._broadcast_stream,
             targets=targets,
+            **kwargs,
         )
         bcast_view.is_coalescing = is_coalescing
         return bcast_view

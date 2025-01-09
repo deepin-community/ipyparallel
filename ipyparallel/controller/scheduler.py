@@ -4,6 +4,7 @@ The Pure ZMQ scheduler does not allow routing schemes other than LRU,
 nor does it check msg_id DAG dependencies. For those, a slightly slower
 Python Scheduler exists.
 """
+
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
 import logging
@@ -13,17 +14,12 @@ import traitlets.log
 import zmq
 from decorator import decorator
 from tornado import ioloop
-from traitlets import Bytes
-from traitlets import default
-from traitlets import Instance
-from traitlets import Set
-from traitlets.config import Config
-from traitlets.config import LoggingConfigurable
+from traitlets import Bytes, Instance, Set, default
+from traitlets.config import Config, LoggingConfigurable
 from zmq.eventloop import zmqstream
 
 from ipyparallel import util
-from ipyparallel.util import connect_logger
-from ipyparallel.util import local_logger
+from ipyparallel.util import connect_logger, local_logger
 
 # local imports
 
@@ -40,7 +36,6 @@ def logged(f, self, *args, **kwargs):
 
 
 class Scheduler(LoggingConfigurable):
-
     loop = Instance(ioloop.IOLoop)
 
     @default("loop")
@@ -51,6 +46,7 @@ class Scheduler(LoggingConfigurable):
 
     @default("session")
     def _default_session(self):
+        util._disable_session_extract_dates()
         return jupyter_client.session.Session(parent=self)
 
     client_stream = Instance(
@@ -139,8 +135,7 @@ def get_common_scheduler_streams(
         # in a process, don't use instance()
         # for safety with multiprocessing
         ctx = zmq.Context()
-        loop = ioloop.IOLoop()
-        loop.make_current()
+        loop = ioloop.IOLoop(make_current=False)
 
     def connect(s, addr):
         return util.connect(
